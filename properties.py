@@ -3,18 +3,25 @@ import sys
 import pygame
 import numpy as np
 from textbox import TextBox
+from objects import *
 
 
 GRAY = (128, 128, 128)
+WHITE = (255, 255, 255)
 
 
 class Property(pygame.sprite.Sprite):
-    def __init__(self):
+    def __init__(self, workspace_size=(900, 520)):
         pygame.sprite.Sprite.__init__(self)
         self.load_pics()
+        self.SIZE_WORKSPACE = workspace_size  # Tamaño del espacio de trabajo
         self.font = pygame.font.SysFont('Arial', 15)
         self.text_boxes()
         self.surfaces()
+        self.drawing = False
+        self.hold_caja = False
+        self.hold_knn = False
+        self.hold_stand = False
 
     def load_pics(self):
         self.addline = pygame.image.load(os.path.join('icons', 'addline.png'))
@@ -49,11 +56,22 @@ class Property(pygame.sprite.Sprite):
         self.load_s = pygame.image.load(os.path.join('icons', 'load_s.png'))
         self.ok_n = pygame.image.load(os.path.join('icons', 'ok_n.png'))
         self.ok_s = pygame.image.load(os.path.join('icons', 'ok_s.png'))
+        # Elementos
+        self.caja_mini = pygame.image.load(os.path.join('pics', 'caja_mini.png'))
+        self.stand_mini = pygame.image.load(os.path.join('pics', 'stand_by_mini.png'))
+        self.knn_mini = pygame.image.load(os.path.join('pics', 'knn_mini.png'))
+        # Normales
+        self.caja = pygame.image.load(os.path.join('pics', 'caja.png'))
+        self.stand = pygame.image.load(os.path.join('pics', 'stand_by.png'))
+        self.knn = pygame.image.load(os.path.join('pics', 'knn.png'))
 
     def surfaces(self):
         self.pos_rename = (400, 180)  # inicio espacio de trabajo
         self.rename_panel = pygame.Surface((200, 90))  # Superficie para las acciones
         self.rename_panel.fill(GRAY)
+        self.workspace = pygame.Surface(self.SIZE_WORKSPACE)
+        self.workspace.fill(WHITE)
+        self.pos_workspace = (60, 170)  # inicio espacio de trabajo
 
     def options_panel(self, position, cont):
         self.image = self.option_s  # Imagen actual de la pestaña opcion (activa)
@@ -63,7 +81,8 @@ class Property(pygame.sprite.Sprite):
         self.rect.y = position[1]*cont
 
     def text_boxes(self):
-        self.name = TextBox((410, 230, 140, 20), id="name_con", active=True, clear_on_enter=False, inactive_on_enter=True)
+        self.name = TextBox((410, 230, 140, 20), id="name_con", active=True,
+                            clear_on_enter=False, inactive_on_enter=True)
 
     def name_surface(self, screen, position):
         screen.blit(self.rename_panel, self.pos_rename)
@@ -179,7 +198,78 @@ class Property(pygame.sprite.Sprite):
         else:
             screen.blit(self.load_n, self.load_rect)
 
+    def rect_elements(self, position):
+        self.caja_mini_rect = self.caja_mini.get_rect()
+        self.caja_mini_rect.x = position[0] + 15
+        self.caja_mini_rect.y = position[1] + 40
+        self.knn_mini_rect = self.knn_mini.get_rect()
+        self.knn_mini_rect.x = position[0] + 75
+        self.knn_mini_rect.y = position[1] + 40
+        self.stand_mini_rect = self.stand_mini.get_rect()
+        self.stand_mini_rect.x = position[0] + 125
+        self.stand_mini_rect.y = position[1] + 40
+
+    def draw_elements(self, screen):
+        """Dibujar elementos a seleccionar (caja-mini, stand-by y knn)"""
+        screen.blit(self.caja_mini, self.caja_mini_rect)
+        screen.blit(self.knn_mini, self.knn_mini_rect)
+        screen.blit(self.stand_mini, self.stand_mini_rect)
+
+    def draw_selected(self, screen, position, pushed):
+        """Dibuja sobre la interfaz el elemento seleccionado"""
+        if self.caja_mini_rect.collidepoint(pushed) or self.hold_caja:
+            self.hold_caja = True
+            valid_workspace = pygame.Rect(self.pos_workspace[0], self.pos_workspace[1],
+                                          self.SIZE_WORKSPACE[0] - 180, self.SIZE_WORKSPACE[1] - 80)
+            elemento = self.caja
+            self.title = 'caja'
+            self.draw_inside_work(screen, position, elemento, valid_workspace)
+        elif self.knn_mini_rect.collidepoint(pushed) or self.hold_knn:
+            self.hold_knn = True
+            valid_workspace = pygame.Rect(self.pos_workspace[0], self.pos_workspace[1],
+                                          self.SIZE_WORKSPACE[0] - 200, self.SIZE_WORKSPACE[1] - 180)
+            elemento = self.knn
+            self.title = 'knn'
+            self.draw_inside_work(screen, position, elemento, valid_workspace)
+        elif self.stand_mini_rect.collidepoint(pushed) or self.hold_stand:
+            self.hold_stand = True
+            valid_workspace = pygame.Rect(self.pos_workspace[0], self.pos_workspace[1],
+                                          self.SIZE_WORKSPACE[0] - 200, self.SIZE_WORKSPACE[1] - 180)
+            elemento = self.stand
+            self.title = 'stand'
+            self.draw_inside_work(screen, position, elemento, valid_workspace)
+
+    def draw_inside_work(self, screen, position, elemento, space):
+        """Funcion para definir la manera en q se ubica el elemento dependiendo de donde se encuentre"""
+
+        if space.collidepoint(position):
+            self.drawing = True
+            position = self.round_pos(position)
+            screen.blit(elemento, position)
+        else:
+            self.drawing = False
+            screen.blit(elemento, position)
+
+    @staticmethod
+    def round_pos(position, base=20):
+        """Determinar posicion dentro de las reticulas"""
+        posx = base*round(position[0]/base)+1
+        posy = base*round(position[1]/base)-9
+        new_pos = (posx, posy)
+        return new_pos
+
+    def put_element(self):
+        """Poner elemento sobre el area de trabajo (contenedor)"""
+        if self.drawing:
+            if self.hold_caja:
+                pass
+            elif self.hold_knn:
+                pass
+            elif self.hold_stand:
+                pass
+
     def draw_grid(self, screen, screen_pos):
+        """Dibujar rejilla"""
         iter_fila = screen_pos[1]
         for fila in range(25):
             iter_fila += 20
@@ -192,70 +282,11 @@ class Property(pygame.sprite.Sprite):
     def draw_plot(self):
         pass
 
-
-class OptionPanels(Property):
-    """Clase para pestañas de opciones"""
-    def __init__(self, name, position, cont, active=False):
-        pygame.sprite.Sprite.__init__(self)
-        self.load_pics()
-        self.name = name
-        self.icon = pygame.image.load(os.path.join('icons', name+str('.png')))
-        self.active = active
-        self.image = self.option_s  # Imagen actual de la pestaña opcion (activa)
-        self.image_off = self.option_n
-        self.rect = self.image.get_rect()  # Recta de la imagen
-        self.rect.x = position[0]
-        self.rect.y = position[1]+cont*40
-
-    def draw_option(self, screen):
-        if self.active:
-            screen.blit(self.image, self.rect)
-        else:
-            screen.blit(self.image_off, self.rect)
-        screen.blit(self.icon, (self.rect[0]-2, self.rect[1]+2))
-
-
-class Container(Property):
-    def __init__(self, pos, cont, tag):
-        pygame.sprite.Sprite.__init__(self)
-        self.load_pics()
-        self.pos = pos  # Posicion de la pestaña
-        self.cont = cont  # Numero actual de pestañas
-        self.font = pygame.font.SysFont('Arial', 13)
-        self.image = self.pestana_s  # Imagen actual de la pestaña (activa)
-        self.image_off = self.pestana_n  # Imagen de pestaña inactiva
-        # Rectas
-        self.rect = self.image.get_rect()  # Recta de la imagen
-        self.rect.x = pos[0] + (120 * (cont - 1))
-        self.rect.y = pos[1]
-        self.recta_new = self.new.get_rect()
-        self.recta_new.x = pos[0] + 120 * cont
-        self.recta_new.y = pos[1]
-        self.recta_add = self.add.get_rect()
-        self.recta_add.x = pos[0] + 120 * cont + 8
-        self.recta_add.y = pos[1] + 6
-        self.recta_close = self.close.get_rect()
-        self.recta_close.x = pos[0] + 89 + (120 * (cont - 1))
-        self.recta_close.y = pos[1] + 5
-        self.name = 'Untitled_' + str(tag)  # Nombre de la pestaña
-        self.selected = True  # Indica si esta activa. Al momento de crearse siempre lo está
-        self.content = None
-
-    def draw_cont(self, screen):
-        self.rect.x = self.pos[0] + (120 * (self.cont - 1))
-        self.rect.y = self.pos[1]
-        self.recta_close.x = self.pos[0] + 89 + (120 * (self.cont - 1))
-        self.recta_close.y = self.pos[1] + 5
-        if self.selected:
-            screen.blit(self.image, self.rect)
-        else:
-            screen.blit(self.image_off, self.rect)
-        screen.blit(self.close, self.recta_close)
-        screen.blit(self.font.render(self.name, True, (255, 0, 0)),
-                    (self.pos[0]+14+(120*(self.cont-1)), self.pos[1]+7))
-
-    def draw_new(self, screen, cont):
-        self.recta_new.x = self.pos[0] + 120 * cont
-        self.recta_add.x = self.pos[0] + 120 * cont + 8
-        screen.blit(self.new, self.recta_new)
-        screen.blit(self.add, self.recta_add)
+    def cancel(self):
+        """Cancelar acciones en ejecución"""
+        self.drawing = False
+        self.hold_caja = False
+        self.hold_knn = False
+        self.hold_stand = False
+        position = (0, 0)
+        return position

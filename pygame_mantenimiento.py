@@ -2,6 +2,7 @@ import pygame
 import sys
 import os
 from properties import *
+from pygame.locals import *
 
 
 WHITE = (255, 255, 255)
@@ -12,20 +13,18 @@ class PGManten:
     """
     Clase para trabajar con pygame
     """
-    def __init__(self, window_size=(1000, 700), workspace_size=(900, 520)):
+    def __init__(self, window_size=(1000, 700)):
         self.initialize_pygame()
         self.clock = pygame.time.Clock()
         self.WINDOW_SIZE = window_size  # Tamaño ventana principal
-        self.SIZE_WORKSPACE = workspace_size  # Tamaño del espacio de trabajo
-        self.pos_workspace = (60, 170)  # inicio espacio de trabajo
+
         self.pos_button_action = (400, 10)  # Inicio de posiciones acciones
         self.button_act_panel = pygame.Surface((150, 120))  # Superficie para las acciones
         self.button_act_panel.fill(WHITE)
-        self.pos_button_elements = (600, 10)  # Inicio de posiciones acciones
-        self.button_ele_panel = pygame.Surface((150, 120))  # Superficie para las acciones
+        self.pos_button_elements = (580, 10)  # Inicio de posiciones acciones
+        self.button_ele_panel = pygame.Surface((200, 120))  # Superficie para las acciones
         self.button_ele_panel.fill(WHITE)
-        self.workspace = pygame.Surface(self.SIZE_WORKSPACE)
-        self.workspace.fill(WHITE)
+
         self.screen_form = pygame.display.set_mode(self.WINDOW_SIZE)
         self.elementos = {'pestañas': pygame.sprite.Group(),
                           'opciones': pygame.sprite.Group()}  # Inicializar diccionario de elementos
@@ -38,21 +37,25 @@ class PGManten:
         os.environ['SDL_VIDEO_CENTERED'] = '1'  # Centra la interfaz
         pygame.display.set_caption('Diagramas confiabilidad')
 
-    def properties(self, position):
+    def properties(self, position, push_position):
         """Dibujar estructuras del sistema"""
         self.screen_form.blit(self.button_act_panel, self.pos_button_action)
         self.screen_form.blit(self.button_ele_panel, self.pos_button_elements)
-        self.screen_form.blit(self.workspace, self.pos_workspace)
+        self.screen_form.blit(self.property_class.workspace, self.property_class.pos_workspace)
+        #self.screen_form.blit(self.property_class.valid_workspace, self.property_class.pos_valid_workspace)
         self.property_class.draw_actions(self.screen_form, position)
+        self.property_class.draw_elements(self.screen_form)
         for elemento in self.elementos['opciones']:
             if elemento.name == 'module':
                 if elemento.active:
-                    self.property_class.draw_grid(self.screen_form, self.pos_workspace)
+                    self.property_class.draw_grid(self.screen_form, self.property_class.pos_workspace)
+                    self.draw_cont_elements()
+                    self.property_class.draw_selected(self.screen_form, position, push_position)
 
     def draw_containers(self, container, cont):
         """Dibujar pestañas"""
-        for pestaña in self.elementos['pestañas']:
-            pestaña.draw_cont(self.screen_form)
+        for pestana in self.elementos['pestañas']:
+            pestana.draw_cont(self.screen_form)
 
         container.draw_new(self.screen_form, cont)
 
@@ -127,7 +130,7 @@ class PGManten:
                 for pestaña in self.elementos['pestañas']:
                     if pestaña.selected == True:
                         pestaña.name = "".join(self.property_class.name.buffer)
-                        self.property_class.name.buffer = [""]
+                self.property_class.name.buffer = [""]
                 self.actions[6] = 0
 
     def check_text(self, event):
@@ -141,25 +144,34 @@ class PGManten:
         if self.property_class.close_name_rect.collidepoint(position):
             self.actions = [0]*9
             self.draw = False
+            self.property_class.name.buffer = [""]
+
+    def draw_cont_elements(self):
+        for contain in self.elementos['pestañas']:
+            if contain.selected:
+                contain.draw_elements(self.screen_form)
 
     def execute_pygame(self):
         cont = 1
         tag = 1
         self.draw = False
-        position_mouse = (0, 0)
+        position_mouse = (0, 0)  # Inicializar posicion presionad
         grid = True  # Rejilla habilitada
-        self.property_class = Property()  # Instancia de propiedades
+        self.property_class = Property(workspace_size=(900, 520))  # Instancia de propiedades
         self.property_class.rect_actions(self.pos_button_action)  # Inicializar rectas de las acciones
-        container = Container((self.pos_workspace[0], self.pos_workspace[1]-30), cont, tag)  # Primera pestaña
+        self.property_class.rect_elements(self.pos_button_elements)  # Inicializar rectas de los elementos
+        container = Container((self.property_class.pos_workspace[0],
+                               self.property_class.pos_workspace[1]-30), cont, tag)  # Primera pestaña
         self.elementos['pestañas'].add(container)  # Agregar pestaña a lista de pestañas (Dentro de diccionario)
         opciones = ['module', 'plot', 'config']  # Pestañas de opciones disponibles
         for elem, opcion in enumerate(opciones):
             active = True if elem == 0 else False  # Esta activa la pestaña si es la primera opcion
-            position = (self.pos_workspace[0]-30, self.pos_workspace[1])
+            position = (self.property_class.pos_workspace[0]-30, self.property_class.pos_workspace[1])
             pestaña_opcion = OptionPanels(opcion, position, elem, active=active)
             self.elementos['opciones'].add(pestaña_opcion)
         close = False
         while not close:
+            keys = pygame.key.get_pressed()  # Obtencion de tecla presionada
             for event in pygame.event.get():
                 if self.draw:
                     self.check_text(event)
@@ -177,13 +189,14 @@ class PGManten:
                         self.close_elements(position_mouse)
 
                     elif pygame.mouse.get_pressed()[2]:  # Boton derecho
-                        for pestaña in self.elementos['pestañas']:  # Colision sobre prestañas
-                            if pestaña.rect.collidepoint(position_mouse):
-                                print('cambiar')
+                        pass
+                elif keys[K_ESCAPE]:  # Acciones al presionar tecla escape
+                    position_mouse = self.property_class.cancel()
+
             abs_position = pygame.mouse.get_pos()
             self.screen_form.fill(GRAY)
             self.draw_containers(container, cont)
-            self.properties(abs_position)
+            self.properties(abs_position, position_mouse)
             self.exec_actions(abs_position, position_mouse)
             if self.actions[6]:
                 self.draw_text()
