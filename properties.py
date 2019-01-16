@@ -2,8 +2,13 @@ import os
 import sys
 import pygame
 import numpy as np
-from textbox import TextBox
+from textbox import *
 from objects import *
+from containers import *
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import matplotlib.backends.backend_agg as agg
 
 
 GRAY = (128, 128, 128)
@@ -18,15 +23,798 @@ class Property(pygame.sprite.Sprite):
         self.font = pygame.font.SysFont('Arial', 15)
         self.text_boxes()
         self.surfaces()
+        self.cont = 1
+        self.tag = 1
         self.drawing = False
         self.hold_caja = False
         self.hold_knn = False
         self.hold_stand = False
+        self.elementos = {'containers': pygame.sprite.Group(),
+                          'opciones': pygame.sprite.Group()}  # Inicializar diccionario de elementos}
+        self.actions = [0] * 9
+        self.checking_text = False  # Indica si se está usando algun campo de texto
+        self.lista_text = None  # Elementos de texto a iterar
+        self.draw = False  # Indica si se encuentra dibujando
+        self.elem_proper = False  # Propiedades doble click izquierdo
+        self.elem_type = False  # Propiedades click derecho
+        self.elem_selected = None  # Etiqueta de elemento seleccionado (propiedad del elemento)
+        self.put_position = (0, 0)
+        self.text_status = [0]*5  # Estado de cajas de texto. 1. name, 2. alpha, 3. betha, 4. alpha y betha
+        self.text_buttons = list()  # Lista de botones de texto
+        self.init_properties()
+        self.type_element = 1  # Indica el tipo de elemento. Si es 1 es caja, 2 es knn, 3 stand by
+        self.line_able = False  # Indica si es posible empezar a construir conexion
+        self.hold_line = False  # Permite dibujar linea
+        self.init_pos = [0, 0]  # Posicion inicial de la linea
+        self.end_line = [0, 0]  # Posicion final de la linea
+        self.line_conections = []  # Almacena los puntos de la conexion que se está dibujando
+        self.connecting = False  # Indica si se estan realizando conexiones
+        self.elem1 = None  # Nombre del elemento inicial de una conexion
+        self.elem2 = None  # Nombre del elemento final de una conexion
+        self.duple_conection = list()  # Almacena cada punto inicial y final para una conexion que se este dibujando
+        self.fig = plt.figure(figsize=[6, 4],  # En pulgadas
+                         dpi=100,  # 100 puntos por pulgada
+                         tight_layout=True)
 
+    def init_properties(self):
+        self.container = Container((self.pos_workspace[0],
+                               self.pos_workspace[1] - 30), self.cont, self.tag)  # Primera pestaña
+        self.elementos['containers'].add(self.container)  # Agregar pestaña a lista de pestañas (Dentro de diccionario)
+        opciones = ['module', 'plot', 'play', 'config']  # Pestañas de opciones disponibles
+        for elem, opcion in enumerate(opciones):
+            active = True if elem == 0 else False  # Esta activa la pestaña si es la primera opcion
+            position = (self.pos_workspace[0] - 30, self.pos_workspace[1])
+            pestana_opcion = OptionPanels(opcion, position, elem, active=active)
+            self.elementos['opciones'].add(pestana_opcion)
+
+        self.rect_actions(self.pos_button_action)  # Inicializar rectas de las acciones
+        self.rect_elements(self.pos_button_elements)  # Inicializar rectas de los elementos
+        exp = TextButton('Exponencial', 'exp', position=(self.pos_proper[0]+65, self.pos_proper[1]+40), size=(72, 30))
+        ray = TextButton('Rayleigh', 'ray', position=(self.pos_proper[0] + 65, self.pos_proper[1]+75), size=(72, 30),
+                         text_position=(14, 5))
+        wei = TextButton('Weibull', 'wei', position=(self.pos_proper[0] + 65, self.pos_proper[1] + 110), size=(72, 30),
+                         text_position=(18, 5))
+        self.text_buttons = [exp, ray, wei]
+
+    # --------------------------------- Relacionado a contenedores------------------------------------------
+
+    def draw_containers(self, screen):
+        """Dibujar pestañas"""
+        for pestana in self.elementos['containers']:
+            pestana.draw_cont(screen)
+
+        self.container.draw_new(screen, self.cont)
+
+        for option in self.elementos['opciones']:
+            option.draw_option(screen)
+
+    def add_container(self):
+        """Añadir pestañas a la interfaz. Cada pestaña es un area de trabajo diferente"""
+        self.cont += 1  # Contador de pestañas
+        self.tag += 1  # Etiqueta pestaña
+        container_new = Container((self.pos_workspace[0], self.pos_workspace[1]-30), self.cont, self.tag)
+        self.elementos['containers'].add(container_new)
+        for container in self.elementos['containers']:  # Verifica cuales pestañas no estan seleccionad
+            if self.cont != container.cont:
+                container.selected = False
+
+    def delete_container(self, position):
+        """Eliminar pestaña deseada"""
+        if len(self.elementos['containers']) > 1:
+            for container in self.elementos['containers']:
+                if container.recta_close.collidepoint(position):
+                    self.elementos['containers'].remove(container)
+                    self.cont -= 1
+                    for contain in self.elementos['containers']:  # En caso de eliminarse una se renombran las demas
+                        if contain.cont > container.cont:
+                            contain.cont -= 1
+                            if container.selected:
+                                contain.selected = True
+                                container.selected = False
+
+    def select_container(self, position):
+        """Seleccionar pestaña a activar"""
+        for container in self.elementos['containers']:
+            if container.rect.collidepoint(position):
+                container.selected = True
+                for contain in self.elementos['containers']:
+                    if container.cont != contain.cont:
+                        contain.selected = False
+
+        for option in self.elementos['opciones']:
+            if option.rect.collidepoint(position):
+                option.active = True
+                for opt in self.elementos['opciones']:
+                    if option.name != opt.name:
+                        opt.active = False
+
+    def draw_cont_elements(self, screen):
+        """Dibujar elementos del contenedor seleccionado"""
+        for contain in self.elementos['containers']:
+            if contain.selected:
+                contain.draw_elements(screen)
+    # ---------------------------------------------------------------------------Fin containers
+    # Acciones a realizar
+
+    def check_actions(self, position):
+        """Verificar que acción se va a realizar"""
+        if self.connect_rect.collidepoint(position):
+            print('conectar')
+            self.actions = [0] * 9
+            self.actions[0] = 1
+        if self.disconnect_rect.collidepoint(position):
+            print('desconectar')
+        if self.rename_rect.collidepoint(position):
+            self.actions = [0]*9
+            print(self.actions)
+            self.actions[6] = 1
+
+    @staticmethod
+    def round_posit(position, base=20):
+        """Determinar posicion dentro de las reticulas"""
+        posx = base*round(position[0]/base)-10
+        posy = base*round(position[1]/base)
+        new_pos = (posx, posy)
+        return new_pos
+
+    def draw_line(self, screen):
+        pygame.draw.aaline(screen, BLACK, self.init_pos, self.end_line)
+        for linea in self.duple_conection:
+            pygame.draw.aaline(screen, BLACK, linea[0], linea[1])
+        self.connecting = True
+
+    def connect_nodes(self):
+        for container in self.elementos['containers']:
+            if container.selected:
+                container.connections.add()
+
+    def exec_actions(self, screen, position, abs_position):
+        """Ejecutar las acciones"""
+        if self.actions[0]:  # Connect
+            #print('conectar')
+            pygame.mouse.set_visible(False)
+            valid_workspace = pygame.Rect(self.pos_workspace[0], self.pos_workspace[1],
+                                          self.SIZE_WORKSPACE[0], self.SIZE_WORKSPACE[1])
+            new_position = (position[0], position[1])
+            if valid_workspace.collidepoint(new_position):
+                put_position = self.round_posit(new_position)
+                self.end_line = (put_position[0]+10, put_position[1]+10)
+                for container in self.elementos['containers']:
+                    if container.selected:
+                        for nodo in container.nodos:
+                            if nodo.rect.collidepoint((put_position[0]+10, put_position[1]+10)):
+                                screen.blit(self.line_on, put_position)
+                                self.line_able = True
+                                if not self.hold_line:  # Define la posicion inicial de una conexion
+                                    self.init_pos = (put_position[0]+10, put_position[1]+10)
+                                    self.elem1 = nodo
+                                break
+                            else:
+                                self.line_able = False
+                                screen.blit(self.line_off, put_position)
+
+            else:
+                screen.blit(self.line_off, new_position)
+        elif self.actions[1]:
+            print('desconectar')
+        elif self.actions[6]:  # Dar nombre a pestaña
+            self.text_status[0] = 1  # Activa name text
+            self.name.active = True
+            self.name_surface(screen, position)  # Dibuja la superficie
+            if self.ok_rect.collidepoint(abs_position):  # Si se presiona sobre ok
+                for container in self.elementos['containers']:
+                    if container.selected == True:
+                        container.name = "".join(self.name.buffer)
+                self.name.buffer = [""]  # Reinicia el buffer
+                self.actions[6] = 0  # Cierra ventana name
+
+    def element_property(self, pushed, proper=0):  # Acciones de doble click
+        """Propiedad de un elemento"""
+        for container in self.elementos['containers']:
+            if container.selected:
+                for caja in container.cajas:
+                    if caja.rect.collidepoint(pushed):
+                        self.elem_selected = caja.tag
+                        self.type_element = 1
+                        if not proper:
+                            self.elem_type = True
+                        else:
+                            self.elem_proper = True
+                for knn_ind in container.knn:
+                    for set_box in knn_ind.cols:
+                        for caja in set_box:
+                            if caja.rect.collidepoint(pushed):
+                                self.type_element = 1
+                                self.elem_selected = caja.tag
+                                if not proper:  # Indica si no es click izquierdo
+                                    self.elem_type = True
+                                else:
+                                    self.elem_proper = True
+                    if knn_ind.rect.collidepoint(pushed):
+                        self.type_element = 2
+                        self.elem_selected = knn_ind.tag
+                        if not proper:
+                            self.elem_type = True
+                        else:
+                            self.elem_proper = True
+
+                for stand_ind in container.stand:
+                    for caja in stand_ind.cajas:
+                        if caja.rect.collidepoint(pushed):
+                            self.type_element = 1
+                            self.elem_selected = caja.tag
+                            if not proper:
+                                self.elem_type = True
+                            else:
+                                self.elem_proper = True
+                        if stand_ind.rect.collidepoint(pushed):
+                            self.type_element = 3
+                            self.elem_selected = stand_ind.tag
+                            if not proper:
+                                self.elem_type = True
+                            else:
+                                self.elem_proper = True
+
+    def add_red_elements(self, push_position):
+        """Agregar o quitar paralelos a un knn"""
+        if self.elem_type:
+            if self.type_element == 2:
+                for container in self.elementos['containers']:
+                    if container.selected:
+                        for knn_ind in container.knn:
+                            if self.addline_rect.collidepoint(push_position):  # Adicionar paralelo
+                                if knn_ind.num_rows < 5:
+                                    if knn_ind.tag == self.elem_selected:
+                                        for nodo in container.nodos:
+                                            if nodo.name_element == self.elem_selected:
+                                                container.nodos.remove(nodo)
+                                        knn_ind.cols[knn_ind.num_rows].add(Caja((knn_ind.pos[0] + 20,
+                                                                                 knn_ind.pos[1] + knn_ind.num_rows * knn_ind.dt)
+                                                                                , 1,
+                                                                                name=knn_ind.tag + "_" + str(knn_ind.num_rows)))
+                                        knn_ind.num_rows += 1
+                                        knn_ind.calc_lines()
+                                        knn_ind.calc_nodes()
+                                        for nodo in knn_ind.nodos:
+                                            container.nodos.add(nodo)
+
+                            if self.reduceline_rect.collidepoint(push_position):  # Eliminar paralelo
+                                if knn_ind.num_rows > 2:
+                                    if knn_ind.tag == self.elem_selected:
+                                        for nodo in container.nodos:
+                                            if nodo.name_element == self.elem_selected:
+                                                container.nodos.remove(nodo)
+                                        knn_ind.cols[knn_ind.num_rows - 1] = pygame.sprite.Group()
+                                        knn_ind.num_rows -= 1
+                                        knn_ind.calc_lines()
+                                        knn_ind.calc_nodes()
+                                        for nodo in knn_ind.nodos:
+                                            container.nodos.add(nodo)
+
+                            for ind, recta in enumerate(self.rects_knn_add):  # Adicionar serie
+                                if recta.collidepoint(push_position):
+                                    if knn_ind.tag == self.elem_selected:
+                                        if len(knn_ind.cols[ind]) < 7:
+                                            knn_ind.cols[ind].add(Caja((knn_ind.pos[0] + 20+knn_ind.dt*len(knn_ind.cols[ind]),
+                                                                        knn_ind.pos[1] + ind * knn_ind.dt),
+                                                                        len(knn_ind.cols[ind])+1,
+                                                                        name=knn_ind.tag + "_" + str(ind)))
+
+                            for ind, recta in enumerate(self.rects_knn_reduce):  # Eliminar serie
+                                if recta.collidepoint(push_position):
+                                    if knn_ind.tag == self.elem_selected:
+                                        if len(knn_ind.cols[ind]) > 1:
+                                            for caja in knn_ind.cols[ind]:
+                                                if caja.id == len(knn_ind.cols[ind]):
+                                                    knn_ind.cols[ind].remove(caja)
+
+            elif self.type_element == 3:
+                for container in self.elementos['containers']:
+                    if container.selected:
+                        for stand_ini in container.stand:
+                            if self.addline_rect.collidepoint(push_position):  # Adicionar paralelo
+                                if stand_ini.num_rows < 5:
+                                    if stand_ini.tag == self.elem_selected:
+                                        for nodo in container.nodos:
+                                            if nodo.name_element == self.elem_selected:
+                                                container.nodos.remove(nodo)
+                                        stand_ini.cajas.add(Caja((stand_ini.pos[0]+80,
+                                                                  stand_ini.pos[1]+stand_ini.node_dt*stand_ini.num_rows-1),
+                                                                 stand_ini.num_rows+1, name=stand_ini.tag + '_'))
+                                        stand_ini.num_rows += 1
+                                        stand_ini.calc_lines()
+                                        stand_ini.calc_nodes()
+                                        for nodo in stand_ini.nodos:
+                                            container.nodos.add(nodo)
+                            if self.reduceline_rect.collidepoint(push_position):  # Eliminar elemento
+                                if stand_ini.num_rows > 2:
+                                    if stand_ini.tag == self.elem_selected:
+                                        for nodo in container.nodos:
+                                            if nodo.name_element == self.elem_selected:
+                                                container.nodos.remove(nodo)
+                                        for caja in stand_ini.cajas:
+                                            if caja.id == stand_ini.num_rows:
+                                                stand_ini.cajas.remove(caja)
+                                        stand_ini.num_rows -= 1
+                                        stand_ini.calc_lines()
+                                        stand_ini.calc_nodes()
+                                        for nodo in stand_ini.nodos:
+                                            container.nodos.add(nodo)
+
+    def close_elements(self, position, force=False):
+        if self.close_name_rect.collidepoint(position) or force:
+            self.actions = [0]*9
+            self.draw = False
+            self.elem_type = False
+            self.elem_proper = False
+            self.name.buffer = [""]
+
+    # --------------Relacionado al texto--------------------------
+
+    def text_boxes(self):
+        """Cajas de texto disponibles"""
+        self.name = TextBox((410, 230, 140, 20), id="name_con", active=True,
+                            clear_on_enter=False, inactive_on_enter=True)
+        self.name_element = TextBox((485, 220, 100, 20), id="name_con", active=True,
+                                    clear_on_enter=False, inactive_on_enter=True)
+        self.box_field1 = TextBox((485, 250, 100, 20), id="name_con", active=False,
+                                  clear_on_enter=False, inactive_on_enter=True)
+        self.box_field2 = TextBox((485, 280, 100, 20), id="name_con", active=False,
+                                  clear_on_enter=False, inactive_on_enter=True)
+
+    def check_text(self, event):
+        if self.text_status[0] == 1:
+            self.name.get_event(event)
+        elif self.text_status[1] == 1:
+            self.name_element.get_event(event)
+            self.box_field1.get_event(event)
+        elif self.text_status[2] == 1:
+            self.name_element.get_event(event)
+            self.box_field1.get_event(event)
+        elif self.text_status[3] == 1:
+            self.name_element.get_event(event)
+            self.box_field1.get_event(event)
+            self.box_field2.get_event(event)
+        elif self.text_status[4] == 1:
+            self.name_element.get_event(event)
+
+    def draw_text(self, screen):
+        if self.text_status[0] == 1:
+            self.name.update()
+            self.name.draw(screen)
+        elif self.text_status[1] == 1:
+            self.name_element.update()
+            self.name_element.draw(screen)
+            self.box_field1.color = WHITE
+            self.box_field1.update()
+            self.box_field1.draw(screen)
+            self.box_field2.active = False
+            self.box_field2.color = GRAY
+            self.box_field2.update()
+            self.box_field2.draw(screen)
+        elif self.text_status[2] == 1:
+            self.name_element.update()
+            self.name_element.draw(screen)
+            self.box_field1.update()
+            self.box_field1.draw(screen)
+            self.box_field1.color = WHITE
+            self.box_field2.active = False
+            self.box_field2.update()
+            self.box_field2.color = GRAY
+            self.box_field2.draw(screen)
+        elif self.text_status[3] == 1:
+            self.name_element.update()
+            self.name_element.draw(screen)
+            self.box_field1.update()
+            self.box_field1.draw(screen)
+            self.box_field2.update()
+            self.box_field2.draw(screen)
+            self.box_field1.color = pygame.Color("white")
+            self.box_field2.color = pygame.Color("white")
+        elif self.text_status[4] == 1:
+            self.name_element.update()
+            self.name_element.draw(screen)
+
+    # ------------------------------------------------------------
+
+    # -------------- Dibujar sobre la superficie--------------------
+    def draw_selected(self, screen, position, pushed):
+        """Dibuja sobre la interfaz el elemento seleccionado"""
+        if self.caja_mini_rect.collidepoint(pushed) or self.hold_caja:
+            self.hold_caja = True
+            valid_workspace = pygame.Rect(self.pos_workspace[0], self.pos_workspace[1],
+                                          self.SIZE_WORKSPACE[0] - 180, self.SIZE_WORKSPACE[1] - 80)
+            elemento = self.caja
+            self.title = 'caja'
+            self.draw_inside_work(screen, position, elemento, valid_workspace)
+        elif self.knn_mini_rect.collidepoint(pushed) or self.hold_knn:
+            self.hold_knn = True
+            valid_workspace = pygame.Rect(self.pos_workspace[0], self.pos_workspace[1],
+                                          self.SIZE_WORKSPACE[0] - 200, self.SIZE_WORKSPACE[1] - 180)
+            elemento = self.knn
+            self.title = 'knn'
+            self.draw_inside_work(screen, position, elemento, valid_workspace)
+        elif self.stand_mini_rect.collidepoint(pushed) or self.hold_stand:
+            self.hold_stand = True
+            valid_workspace = pygame.Rect(self.pos_workspace[0], self.pos_workspace[1],
+                                          self.SIZE_WORKSPACE[0] - 200, self.SIZE_WORKSPACE[1] - 180)
+            elemento = self.stand
+            self.title = 'stand'
+            self.draw_inside_work(screen, position, elemento, valid_workspace)
+
+    def draw_inside_work(self, screen, position, elemento, space):
+        """Funcion para definir la manera en q se ubica el elemento dependiendo de donde se encuentre"""
+        if space.collidepoint(position):
+            self.drawing = True
+            self.put_position = self.round_pos(position)
+            screen.blit(elemento, self.put_position)
+        else:
+            self.drawing = False
+            screen.blit(elemento, position)
+
+    @staticmethod
+    def round_pos(position, base=20):
+        """Determinar posicion dentro de las reticulas"""
+        posx = base*round(position[0]/base)+1
+        posy = base*round(position[1]/base)-9
+        new_pos = (posx, posy)
+        return new_pos
+
+    def put_element(self):
+        """Poner elemento sobre el area de trabajo (contenedor)"""
+        if self.hold_caja:
+            for container in self.elementos['containers']:
+                if container.selected:
+                    container.cont_cajas += 1
+                    caja = Caja(self.put_position, container.cont_cajas)
+                    container.list_box.add_data(caja)
+                    for nodo in caja.nodos:
+                        container.nodos.add(nodo)
+                    container.cajas.add(caja)
+        elif self.hold_knn:
+            for container in self.elementos['containers']:
+                if container.selected:
+                    container.cont_knn += 1
+                    knn = Knn(self.put_position, container.cont_knn)
+                    for col in knn.cols:
+                        for caja in col:
+                            container.list_box.add_data(caja)
+                    for nodo in knn.nodos:
+                        container.nodos.add(nodo)
+                    container.knn.add(knn)
+        elif self.hold_stand:
+            for container in self.elementos['containers']:
+                if container.selected:
+                    container.cont_stand += 1
+                    stand = Stand(self.put_position, container.cont_stand)
+                    for caja in stand.cajas:
+                        container.list_box.add_data(caja)
+                    for nodo in stand.nodos:
+                        container.nodos.add(nodo)
+                    container.stand.add(stand)
+
+    def draw_grid(self, screen, screen_pos):
+        """Dibujar rejilla"""
+        iter_fila = screen_pos[1]
+        for fila in range(25):
+            iter_fila += 20
+            iter_col = screen_pos[0]
+            for columna in range(44):
+                iter_col += 20
+                pos_circle = (iter_col, iter_fila)
+                screen.blit(self.grid, pos_circle)
+
+    def draw_plot(self):
+        pass
+
+    def draw_on_screen(self, screen, position, push_position):  # Aca se dibujan la mayoria de acciones realizadas
+        """Dibujar estructuras del sistema en pantalla"""
+        screen.blit(self.button_act_panel, self.pos_button_action)
+        screen.blit(self.button_ele_panel, self.pos_button_elements)
+        screen.blit(self.workspace, self.pos_workspace)
+        self.draw_actions(screen, position)
+        self.draw_elements(screen)
+        for elemento in self.elementos['opciones']:
+            if elemento.name == 'module':
+                if elemento.active:
+                    self.draw_grid(screen, self.pos_workspace)
+                    self.draw_cont_elements(screen)
+                    self.draw_selected(screen, position, push_position)
+                if self.elem_proper:  # Dibujar panel de propiedades
+                    self.proper_surface(screen, position)
+                    if self.ok_rect2.collidepoint(push_position):  # Si se presiona sobre ok
+                        for container in self.elementos['containers']:
+                            if container.selected:  # Agregar nombre a cajas
+                                for caja in container.cajas:
+                                    if caja.tag == self.elem_selected:
+                                        caja.tag = "".join(self.name_element.buffer)
+                                        caja.alpha = "".join(self.box_field1.buffer)
+                                        caja.betha = "".join(self.box_field2.buffer)
+                                        self.elem_proper = False
+                                for knn_ind in container.knn:
+                                    for set_boxes in knn_ind.cols:
+                                        for caja in set_boxes:
+                                            if caja.tag == self.elem_selected:
+                                                caja.tag = "".join(self.name_element.buffer)
+                                                caja.alpha = "".join(self.box_field1.buffer)
+                                                caja.betha = "".join(self.box_field2.buffer)
+                                                self.elem_proper = False
+                                for stand_ind in container.stand:
+                                    for caja in stand_ind.cajas:
+                                        if caja.tag == self.elem_selected:
+                                            caja.tag = "".join(self.name_element.buffer)
+                                            caja.alpha = "".join(self.box_field1.buffer)
+                                            caja.betha = "".join(self.box_field2.buffer)
+                                            self.elem_proper = False
+                if self.elem_type:
+                    self.type_surface(screen, position, push_position)
+            elif elemento.name == 'plot':
+                if elemento.active:
+                    for container in self.elementos['containers']:
+                        if container.selected:
+                            screen.blit(self.plot_surface, self.pos_plot)
+                            container.list_box.draw(screen)
+                            container.list_box.consult_position(push_position)
+                            screen.blit(self.canvas_space(self.fig), (310, 240))
+
+    def cancel(self):
+        """Cancelar acciones en ejecución"""
+        self.drawing = False
+        self.hold_caja = False
+        self.hold_knn = False
+        self.hold_stand = False
+        self.elem_proper = False
+        self.elem_type = False
+        self.line_able = False
+        self.hold_line = False
+        self.connecting = False
+        self.init_pos = [0, 0]  # Posicion inicial de la linea
+        self.end_line = [0, 0]  # Posicion final de la linea
+        self.duple_conection = list()
+        pygame.mouse.set_visible(True)
+        position = (0, 0)
+        return position
+
+    #  -----------------------Relacionado a superficies----------------------------
+    def surfaces(self):
+        """Superficies disponibles"""
+        self.pos_button_action = (400, 10)  # Inicio de posiciones acciones
+        self.button_act_panel = pygame.Surface((150, 120))  # Superficie para las acciones
+        self.button_act_panel.fill(WHITE)
+        self.pos_button_elements = (580, 10)  # Inicio de posiciones acciones
+        self.button_ele_panel = pygame.Surface((200, 120))  # Superficie para las acciones
+        self.button_ele_panel.fill(WHITE)
+        self.pos_rename = (400, 180)  # inicio espacio de trabajo
+        self.rename_panel = pygame.Surface((200, 90))  # Superficie para las acciones
+        self.rename_panel.fill(GRAY)
+        self.workspace = pygame.Surface(self.SIZE_WORKSPACE)
+        self.workspace.fill(WHITE)
+        self.pos_workspace = (60, 170)  # inicio espacio de trabajo
+        self.proper_panel = pygame.Surface((200, 160))
+        self.proper_panel.fill(GRAY)
+        self.pos_proper = (400, 180)
+        self.proper_panel_knn = pygame.Surface((200, 240))
+        self.proper_panel_knn.fill(GRAY)
+        self.pos_proper = (400, 180)
+        self.plot_surface = pygame.Surface((self.SIZE_WORKSPACE[0]-30, self.SIZE_WORKSPACE[1]-30))
+        self.plot_surface.fill(GRAY)
+        self.pos_plot = (self.pos_workspace[0]+15, self.pos_workspace[1]+15)
+
+    def options_panel(self, position, cont):
+        self.image = self.option_s  # Imagen actual de la pestaña opcion (activa)
+        self.image_off = self.option_n
+        self.rect = self.image.get_rect()  # Recta de la imagen
+        self.rect.x = position[0]
+        self.rect.y = position[1]*cont
+
+    def proper_surface(self, screen, position):
+        """Superficie para propiedades del elemento seleccionado"""
+        if self.type_element == 1:  # Aca se identifica si el panel es para caja, knn o standby
+            screen.blit(self.proper_panel, self.pos_proper)
+        else:
+            screen.blit(self.rename_panel, self.pos_rename)
+        screen.blit(self.close, self.close_name_rect)
+        screen.blit(self.font.render('Propiedades ' + self.elem_selected, True, (0, 0, 0)),
+                    (self.pos_proper[0] + 10, self.pos_proper[1] + 10))
+        screen.blit(self.font.render('Nombre: ', True, (0, 0, 0)),
+                    (self.pos_proper[0] + 15, self.pos_proper[1] + 40))
+        if self.type_element == 1:  # Si es tipo 1, osea solo caja
+            screen.blit(self.font.render('Alpha: ', True, (0, 0, 0)),
+                        (self.pos_proper[0] + 25, self.pos_proper[1] + 70))
+            screen.blit(self.font.render('Betha: ', True, (0, 0, 0)),
+                        (self.pos_proper[0] + 25, self.pos_proper[1] + 100))
+            for containter in self.elementos['containers']:
+                if containter.selected:
+                    for caja in containter.cajas:
+                        if caja.tag == self.elem_selected:
+                            if caja.mod == 'exp':
+                                self.text_status = [0, 1, 0, 0, 0]
+                            elif caja.mod == 'ray':
+                                self.text_status = [0, 0, 1, 0, 0]
+                            elif caja.mod == 'wei':
+                                self.text_status = [0, 0, 0, 1, 0]
+
+                    for knn_ind in containter.knn:
+                        for set_boxes in knn_ind.cols:
+                            for caja in set_boxes:
+                                if caja.tag == self.elem_selected:
+                                    if caja.mod == 'exp':
+                                        self.text_status = [0, 1, 0, 0, 0]
+                                    elif caja.mod == 'ray':
+                                        self.text_status = [0, 0, 1, 0, 0]
+                                    elif caja.mod == 'wei':
+                                        self.text_status = [0, 0, 0, 1, 0]
+
+                    for stand_ind in containter.stand:
+                        for caja in stand_ind.cajas:
+                            if caja.tag == self.elem_selected:
+                                if caja.mod == 'exp':
+                                    self.text_status = [0, 1, 0, 0, 0]
+                                elif caja.mod == 'ray':
+                                    self.text_status = [0, 0, 1, 0, 0]
+                                elif caja.mod == 'wei':
+                                    self.text_status = [0, 0, 0, 1, 0]
+
+            if self.ok_rect2.collidepoint(position):
+                screen.blit(self.ok_s, self.ok_rect2)
+                screen.blit(self.font.render('Aceptar', True, (0, 0, 0)),
+                            (position[0] + 8, position[1] + 8))
+            else:
+                screen.blit(self.ok_n, self.ok_rect2)
+
+        elif self.type_element == 2:
+            for container in self.elementos['containers']:
+                for knn_ind in container.knn:
+                    if knn_ind.tag == self.elem_selected:
+                        self.text_status = [0, 0, 0, 0, 1]
+
+            if self.ok_rect.collidepoint(position):
+                screen.blit(self.ok_s, self.ok_rect)
+                screen.blit(self.font.render('Aceptar', True, (0, 0, 0)),
+                            (position[0] + 8, position[1] + 8))
+            else:
+                screen.blit(self.ok_n, self.ok_rect)
+        elif self.type_element == 3:
+            self.text_status = [0, 0, 0, 0, 1]
+            if self.ok_rect.collidepoint(position):
+                screen.blit(self.ok_s, self.ok_rect)
+                screen.blit(self.font.render('Aceptar', True, (0, 0, 0)),
+                            (position[0] + 8, position[1] + 8))
+            else:
+                screen.blit(self.ok_n, self.ok_rect)
+
+    def type_surface(self, screen, position, pushed):
+        """Superifice para tipo del elemento seleccionado"""
+        if self.type_element == 1:  # Propiedades para caja sola
+            screen.blit(self.proper_panel, self.pos_proper)
+            screen.blit(self.close, self.close_name_rect)
+            screen.blit(self.font.render('Tipo confiabilidad '+self.elem_selected, True, (0, 0, 0)),
+                        (self.pos_proper[0] + 10, self.pos_proper[1] + 10))
+            for textbutton in self.text_buttons:  # Recorrer todos los botones de texto
+                textbutton.draw_button(screen)  # Dibujar el boton
+                if textbutton.recta.collidepoint(position):  # Si se pasa sobr eel boton
+                    textbutton.over = True  # Se marca como sobrepuesto
+                    if textbutton.recta.collidepoint(pushed):  # Se presiona el boton
+                        for container in self.elementos['containers']:  # Buscar contenedor actual
+                            if container.selected:
+                                for caja in container.cajas:  # Cajas del contenedor actual
+                                    if caja.tag == self.elem_selected:  # Si la caja tiene el nombre del elem seleccionado
+                                        caja.mod = textbutton.name  # Se cambia el tipo de confiabilidad
+                                for knn_ind in container.knn:
+                                    for set_boxes in knn_ind.cols:
+                                        for caja in set_boxes:
+                                            if caja.tag == self.elem_selected:  # Si la caja tiene el nombre del elem seleccionado
+                                                caja.mod = textbutton.name  # Se cambia el tipo de confiabilidad
+                                for stand_ind in container.stand:
+                                    for caja in stand_ind.cajas:
+                                        if caja.tag == self.elem_selected:
+                                            caja.mod = textbutton.name
+                else:
+                    textbutton.over = False
+        elif self.type_element == 2:  # Propiedades para knn
+            screen.blit(self.proper_panel_knn, self.pos_proper)
+            screen.blit(self.close, self.close_name_rect)
+            screen.blit(self.font.render('Estructura ' + self.elem_selected, True, (0, 0, 0)),
+                        (self.pos_proper[0] + 10, self.pos_proper[1] + 10))
+            num_rows = 1
+            for container in self.elementos['containers']:
+                if container.selected:
+                    for knn_ind in container.knn:
+                        if knn_ind.tag == self.elem_selected:
+                            num_rows = knn_ind.num_rows
+            screen.blit(self.font.render('Nro. parelelos:  ' + str(num_rows), True, (0, 0, 0)),
+                        (self.pos_proper[0] + 10, self.pos_proper[1] + 40))
+
+            if self.addline_rect.collidepoint(position):
+                screen.blit(self.addline_s, self.addline_rect)
+                screen.blit(self.font.render('Agregar paralelo', True, (0, 0, 0)),
+                            (position[0] + 8, position[1] + 8))
+            else:
+                screen.blit(self.addline_n, self.addline_rect)
+
+            if self.reduceline_rect.collidepoint(position):
+                screen.blit(self.reduceline_s, self.reduceline_rect)
+                screen.blit(self.font.render('Reducir paralelo', True, (0, 0, 0)),
+                            (position[0] + 8, position[1] + 8))
+            else:
+                screen.blit(self.reduceline_n, self.reduceline_rect)
+
+            for ind, recta in enumerate(self.rects_knn_add):  # Recta de agregar series
+                for container in self.elementos['containers']:
+                    if container.selected:
+                        for knn_ind in container.knn:
+                            if ind < knn_ind.num_rows:
+                                if recta.collidepoint(position):
+                                    screen.blit(self.addline_s, recta)
+                                    screen.blit(self.font.render('Agregar serie', True, (0, 0, 0)),
+                                                (position[0] + 8, position[1] + 8))
+                                else:
+                                    screen.blit(self.addline_n, recta)
+                            else:
+                                screen.blit(self.addline_not, recta)
+
+            for ind, recta in enumerate(self.rects_knn_reduce):  # Rectar de reducir series
+                for container in self.elementos['containers']:
+                    if container.selected:
+                        for knn_ind in container.knn:
+                            if ind < knn_ind.num_rows:
+                                if recta.collidepoint(position):
+                                    screen.blit(self.reduceline_s, recta)
+                                    screen.blit(self.font.render('Reducir serie', True, (0, 0, 0)),
+                                                (position[0] + 8, position[1] + 8))
+                                else:
+                                    screen.blit(self.reduceline_n, recta)
+                            else:
+                                screen.blit(self.reduceline_not, recta)
+
+        elif self.type_element == 3:
+            screen.blit(self.rename_panel, self.pos_rename)
+            screen.blit(self.close, self.close_name_rect)
+            screen.blit(self.font.render('Estructura ' + self.elem_selected, True, (0, 0, 0)),
+                        (self.pos_proper[0] + 10, self.pos_proper[1] + 10))
+            num_rows = 1
+            for container in self.elementos['containers']:
+                if container.selected:
+                    for stand_ind in container.stand:
+                        if stand_ind.tag == self.elem_selected:
+                            num_rows = stand_ind.num_rows
+            screen.blit(self.font.render('Nro. elementos:  ' + str(num_rows), True, (0, 0, 0)),
+                        (self.pos_proper[0] + 10, self.pos_proper[1] + 40))
+            if self.addline_rect.collidepoint(position):
+                screen.blit(self.addline_s, self.addline_rect)
+                screen.blit(self.font.render('Agregar elemento', True, (0, 0, 0)),
+                            (position[0] + 8, position[1] + 8))
+            else:
+                screen.blit(self.addline_n, self.addline_rect)
+
+            if self.reduceline_rect.collidepoint(position):
+                screen.blit(self.reduceline_s, self.reduceline_rect)
+                screen.blit(self.font.render('Eliminar elemento', True, (0, 0, 0)),
+                            (position[0] + 8, position[1] + 8))
+            else:
+                screen.blit(self.reduceline_n, self.reduceline_rect)
+
+    def name_surface(self, screen, position):
+        screen.blit(self.rename_panel, self.pos_rename)
+        screen.blit(self.close, self.close_name_rect)
+        screen.blit(self.font.render('Nombre pestaña:', True, (0, 0, 0)),
+                    (self.pos_rename[0]+10, self.pos_rename[1]+10))
+        if self.ok_rect.collidepoint(position):
+            screen.blit(self.ok_s, self.ok_rect)
+            screen.blit(self.font.render('Aceptar', True, (0, 0, 0)),
+                        (position[0] + 8, position[1] + 8))
+        else:
+            screen.blit(self.ok_n, self.ok_rect)
+
+    # ---------------Lo constante-------------------------------
     def load_pics(self):
-        self.addline = pygame.image.load(os.path.join('icons', 'addline.png'))
-        self.reduceline = pygame.image.load(os.path.join('icons', 'reduceline.png'))
-        self.reduceline_over = pygame.image.load(os.path.join('icons', 'reduceline_over.png'))
+        """Cargar imagenes"""
+        self.addline_s = pygame.image.load(os.path.join('icons', 'addline_s.png'))
+        self.addline_n = pygame.image.load(os.path.join('icons', 'addline_n.png'))
+        self.reduceline_s = pygame.image.load(os.path.join('icons', 'reduceline_s.png'))
+        self.reduceline_n = pygame.image.load(os.path.join('icons', 'reduceline_n.png'))
+        self.addline_not = pygame.image.load(os.path.join('icons', 'addline_not.png'))
+        self.reduceline_not = pygame.image.load(os.path.join('icons', 'reduceline_not.png'))
         self.pestana_s = pygame.image.load(os.path.join('pics', 'pesta_s.png'))
         self.pestana_n = pygame.image.load(os.path.join('pics', 'pesta_n.png'))
         self.new = pygame.image.load(os.path.join('pics', 'pesta_new.png'))
@@ -64,37 +852,9 @@ class Property(pygame.sprite.Sprite):
         self.caja = pygame.image.load(os.path.join('pics', 'caja.png'))
         self.stand = pygame.image.load(os.path.join('pics', 'stand_by.png'))
         self.knn = pygame.image.load(os.path.join('pics', 'knn.png'))
-
-    def surfaces(self):
-        self.pos_rename = (400, 180)  # inicio espacio de trabajo
-        self.rename_panel = pygame.Surface((200, 90))  # Superficie para las acciones
-        self.rename_panel.fill(GRAY)
-        self.workspace = pygame.Surface(self.SIZE_WORKSPACE)
-        self.workspace.fill(WHITE)
-        self.pos_workspace = (60, 170)  # inicio espacio de trabajo
-
-    def options_panel(self, position, cont):
-        self.image = self.option_s  # Imagen actual de la pestaña opcion (activa)
-        self.image_off = self.option_n
-        self.rect = self.image.get_rect()  # Recta de la imagen
-        self.rect.x = position[0]
-        self.rect.y = position[1]*cont
-
-    def text_boxes(self):
-        self.name = TextBox((410, 230, 140, 20), id="name_con", active=True,
-                            clear_on_enter=False, inactive_on_enter=True)
-
-    def name_surface(self, screen, position):
-        screen.blit(self.rename_panel, self.pos_rename)
-        screen.blit(self.close, self.close_name_rect)
-        screen.blit(self.font.render('Nombre pestaña:', True, (0, 0, 0)),
-                    (self.pos_rename[0]+10, self.pos_rename[1]+10))
-        if self.ok_rect.collidepoint(position):
-            screen.blit(self.ok_s, self.ok_rect)
-            screen.blit(self.font.render('Aceptar', True, (0, 0, 0)),
-                        (position[0] + 8, position[1] + 8))
-        else:
-            screen.blit(self.ok_n, self.ok_rect)
+        #Acciones
+        self.line_on = pygame.image.load(os.path.join('pics', 'linea_on.png'))
+        self.line_off = pygame.image.load(os.path.join('pics', 'linea_off.png'))
 
     def rect_actions(self, pos_actions):
         self.connect_rect = self.connect_n.get_rect()
@@ -133,6 +893,26 @@ class Property(pygame.sprite.Sprite):
         self.ok_rect = self.ok_n.get_rect()
         self.ok_rect.x = self.pos_rename[0] + 159
         self.ok_rect.y = self.pos_rename[1] + 45
+        self.ok_rect2 = self.ok_n.get_rect()  # Ok para propiedades
+        self.ok_rect2.x = self.pos_proper[0] + 85
+        self.ok_rect2.y = self.pos_proper[1] + 125
+        self.addline_rect = self.addline_n.get_rect()
+        self.addline_rect.x = self.pos_proper[0] + 110
+        self.addline_rect.y = self.pos_proper[1] + 35
+        self.reduceline_rect = self.reduceline_n.get_rect()
+        self.reduceline_rect.x = self.pos_proper[0] + 145
+        self.reduceline_rect.y = self.pos_proper[1] + 35
+        self.rects_knn_add = []
+        self.rects_knn_reduce = []
+        for number in range(5):
+            recta_red = self.reduceline_rect.copy()
+            recta_red.x = self.pos_proper[0] + 145
+            recta_red.y = self.pos_proper[1] + 35*(number+2)
+            self.rects_knn_reduce.append(recta_red)
+            recta_add = self.addline_rect.copy()
+            recta_add.x = self.pos_proper[0] + 110
+            recta_add.y = self.pos_proper[1] + 35 * (number + 2)
+            self.rects_knn_add.append(recta_add)
 
     def draw_actions(self, screen, position):
         if self.connect_rect.collidepoint(position):
@@ -215,78 +995,13 @@ class Property(pygame.sprite.Sprite):
         screen.blit(self.knn_mini, self.knn_mini_rect)
         screen.blit(self.stand_mini, self.stand_mini_rect)
 
-    def draw_selected(self, screen, position, pushed):
-        """Dibuja sobre la interfaz el elemento seleccionado"""
-        if self.caja_mini_rect.collidepoint(pushed) or self.hold_caja:
-            self.hold_caja = True
-            valid_workspace = pygame.Rect(self.pos_workspace[0], self.pos_workspace[1],
-                                          self.SIZE_WORKSPACE[0] - 180, self.SIZE_WORKSPACE[1] - 80)
-            elemento = self.caja
-            self.title = 'caja'
-            self.draw_inside_work(screen, position, elemento, valid_workspace)
-        elif self.knn_mini_rect.collidepoint(pushed) or self.hold_knn:
-            self.hold_knn = True
-            valid_workspace = pygame.Rect(self.pos_workspace[0], self.pos_workspace[1],
-                                          self.SIZE_WORKSPACE[0] - 200, self.SIZE_WORKSPACE[1] - 180)
-            elemento = self.knn
-            self.title = 'knn'
-            self.draw_inside_work(screen, position, elemento, valid_workspace)
-        elif self.stand_mini_rect.collidepoint(pushed) or self.hold_stand:
-            self.hold_stand = True
-            valid_workspace = pygame.Rect(self.pos_workspace[0], self.pos_workspace[1],
-                                          self.SIZE_WORKSPACE[0] - 200, self.SIZE_WORKSPACE[1] - 180)
-            elemento = self.stand
-            self.title = 'stand'
-            self.draw_inside_work(screen, position, elemento, valid_workspace)
-
-    def draw_inside_work(self, screen, position, elemento, space):
-        """Funcion para definir la manera en q se ubica el elemento dependiendo de donde se encuentre"""
-
-        if space.collidepoint(position):
-            self.drawing = True
-            position = self.round_pos(position)
-            screen.blit(elemento, position)
-        else:
-            self.drawing = False
-            screen.blit(elemento, position)
-
     @staticmethod
-    def round_pos(position, base=20):
-        """Determinar posicion dentro de las reticulas"""
-        posx = base*round(position[0]/base)+1
-        posy = base*round(position[1]/base)-9
-        new_pos = (posx, posy)
-        return new_pos
-
-    def put_element(self):
-        """Poner elemento sobre el area de trabajo (contenedor)"""
-        if self.drawing:
-            if self.hold_caja:
-                pass
-            elif self.hold_knn:
-                pass
-            elif self.hold_stand:
-                pass
-
-    def draw_grid(self, screen, screen_pos):
-        """Dibujar rejilla"""
-        iter_fila = screen_pos[1]
-        for fila in range(25):
-            iter_fila += 20
-            iter_col = screen_pos[0]
-            for columna in range(44):
-                iter_col += 20
-                pos_circle = (iter_col, iter_fila)
-                screen.blit(self.grid, pos_circle)
-
-    def draw_plot(self):
-        pass
-
-    def cancel(self):
-        """Cancelar acciones en ejecución"""
-        self.drawing = False
-        self.hold_caja = False
-        self.hold_knn = False
-        self.hold_stand = False
-        position = (0, 0)
-        return position
+    def canvas_space(fig):
+        """Dibujar axis sobre la GUI"""
+        canvas = agg.FigureCanvasAgg(fig)
+        canvas.draw()
+        renderer = canvas.get_renderer()
+        raw_data = renderer.tostring_rgb()
+        size = canvas.get_width_height()
+        surf = pygame.image.fromstring(raw_data, size, "RGB")
+        return surf

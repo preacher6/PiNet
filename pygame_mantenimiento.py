@@ -1,6 +1,7 @@
 import pygame
 import sys
 import os
+import matplotlib.pyplot as plt
 from properties import *
 from pygame.locals import *
 
@@ -17,189 +18,98 @@ class PGManten:
         self.initialize_pygame()
         self.clock = pygame.time.Clock()
         self.WINDOW_SIZE = window_size  # Tamaño ventana principal
-
-        self.pos_button_action = (400, 10)  # Inicio de posiciones acciones
-        self.button_act_panel = pygame.Surface((150, 120))  # Superficie para las acciones
-        self.button_act_panel.fill(WHITE)
-        self.pos_button_elements = (580, 10)  # Inicio de posiciones acciones
-        self.button_ele_panel = pygame.Surface((200, 120))  # Superficie para las acciones
-        self.button_ele_panel.fill(WHITE)
-
         self.screen_form = pygame.display.set_mode(self.WINDOW_SIZE)
-        self.elementos = {'pestañas': pygame.sprite.Group(),
-                          'opciones': pygame.sprite.Group()}  # Inicializar diccionario de elementos
-        self.actions = [0]*9
-        self.checking_text = False  # Indica si se está usando algun campo de texto
-        self.lista_text = None  # Elementos de texto a iterar
+        self.property_class = Property(workspace_size=(900, 520))  # Instancia de propiedades
 
-    def initialize_pygame(self):
+    @staticmethod
+    def initialize_pygame():
         pygame.init()
         os.environ['SDL_VIDEO_CENTERED'] = '1'  # Centra la interfaz
         pygame.display.set_caption('Diagramas confiabilidad')
 
-    def properties(self, position, push_position):
-        """Dibujar estructuras del sistema"""
-        self.screen_form.blit(self.button_act_panel, self.pos_button_action)
-        self.screen_form.blit(self.button_ele_panel, self.pos_button_elements)
-        self.screen_form.blit(self.property_class.workspace, self.property_class.pos_workspace)
-        #self.screen_form.blit(self.property_class.valid_workspace, self.property_class.pos_valid_workspace)
-        self.property_class.draw_actions(self.screen_form, position)
-        self.property_class.draw_elements(self.screen_form)
-        for elemento in self.elementos['opciones']:
-            if elemento.name == 'module':
-                if elemento.active:
-                    self.property_class.draw_grid(self.screen_form, self.property_class.pos_workspace)
-                    self.draw_cont_elements()
-                    self.property_class.draw_selected(self.screen_form, position, push_position)
-
-    def draw_containers(self, container, cont):
-        """Dibujar pestañas"""
-        for pestana in self.elementos['pestañas']:
-            pestana.draw_cont(self.screen_form)
-
-        container.draw_new(self.screen_form, cont)
-
-        for option in self.elementos['opciones']:
-            option.draw_option(self.screen_form)
-
-    def add_container(self, cont, tag):
-        """Añadir pestañas a la interfaz. Cada pestaña es un area de trabajo diferente"""
-        cont += 1  # Contador de pestañas
-        tag += 1  # Etiqueta pestaña
-        container_new = Container((self.pos_workspace[0], self.pos_workspace[1]-30), cont, tag)
-        self.elementos['pestañas'].add(container_new)
-        for pestaña in self.elementos['pestañas']:  # Verifica cuales pestañas no estan seleccionad
-            if cont != pestaña.cont:
-                pestaña.selected = False
-        return cont, tag
-
-    def delete_container(self, position, cont):
-        """Eliminar pestaña deseada"""
-        if len(self.elementos['pestañas']) > 1:
-            for pestaña in self.elementos['pestañas']:
-                if pestaña.recta_close.collidepoint(position):
-                    print(pestaña.name)
-                    self.elementos['pestañas'].remove(pestaña)
-                    cont -= 1
-                    for pes in self.elementos['pestañas']:  # En caso de eliminarse una se renombran las demas
-                        if pes.cont > pestaña.cont:
-                            pes.cont -= 1
-                            if pestaña.selected:
-                                pes.selected = True
-                                pestaña.selected = False
-        return cont
-
-    def select_container(self, position):
-        """Seleccionar pestaña a activar"""
-        for pestaña in self.elementos['pestañas']:
-            if pestaña.rect.collidepoint(position):
-                pestaña.selected = True
-                for pest in self.elementos['pestañas']:
-                    if pestaña.cont != pest.cont:
-                        pest.selected = False
-
-        for option in self.elementos['opciones']:
-            if option.rect.collidepoint(position):
-                option.active = True
-                for opt in self.elementos['opciones']:
-                    if option.name != opt.name:
-                        opt.active = False
-
-    def check_actions(self, position):
-        if self.property_class.connect_rect.collidepoint(position):
-            print('conectar')
-            print("".join(self.property_class.name.buffer))
-        if self.property_class.disconnect_rect.collidepoint(position):
-            print('desconectar')
-        if self.property_class.rename_rect.collidepoint(position):
-            self.actions = [0]*9
-            print(self.actions)
-            self.actions[6] = 1
-
-    def exec_actions(self, position, abs_position):
-        if self.actions[0]:  # Connect
-            print('conectar')
-
-        elif self.actions[1]:
-            print('desconectar')
-        elif self.actions[6]:
-            self.property_class.name.active = True
-            self.property_class.name_surface(self.screen_form, position)
-            if self.property_class.ok_rect.collidepoint(abs_position):
-                print("".join(self.property_class.name.buffer))
-                for pestaña in self.elementos['pestañas']:
-                    if pestaña.selected == True:
-                        pestaña.name = "".join(self.property_class.name.buffer)
-                self.property_class.name.buffer = [""]
-                self.actions[6] = 0
-
-    def check_text(self, event):
-        self.property_class.name.get_event(event)
-
-    def draw_text(self):
-        self.property_class.name.update()
-        self.property_class.name.draw(self.screen_form)
-
-    def close_elements(self, position):
-        if self.property_class.close_name_rect.collidepoint(position):
-            self.actions = [0]*9
-            self.draw = False
-            self.property_class.name.buffer = [""]
-
-    def draw_cont_elements(self):
-        for contain in self.elementos['pestañas']:
-            if contain.selected:
-                contain.draw_elements(self.screen_form)
-
     def execute_pygame(self):
-        cont = 1
-        tag = 1
-        self.draw = False
         position_mouse = (0, 0)  # Inicializar posicion presionad
         grid = True  # Rejilla habilitada
-        self.property_class = Property(workspace_size=(900, 520))  # Instancia de propiedades
-        self.property_class.rect_actions(self.pos_button_action)  # Inicializar rectas de las acciones
-        self.property_class.rect_elements(self.pos_button_elements)  # Inicializar rectas de los elementos
-        container = Container((self.property_class.pos_workspace[0],
-                               self.property_class.pos_workspace[1]-30), cont, tag)  # Primera pestaña
-        self.elementos['pestañas'].add(container)  # Agregar pestaña a lista de pestañas (Dentro de diccionario)
-        opciones = ['module', 'plot', 'config']  # Pestañas de opciones disponibles
-        for elem, opcion in enumerate(opciones):
-            active = True if elem == 0 else False  # Esta activa la pestaña si es la primera opcion
-            position = (self.property_class.pos_workspace[0]-30, self.property_class.pos_workspace[1])
-            pestaña_opcion = OptionPanels(opcion, position, elem, active=active)
-            self.elementos['opciones'].add(pestaña_opcion)
         close = False
+        timer = 0  # Necesario para el doble click
+        dt = 0  # Incrementos del timer
         while not close:
             keys = pygame.key.get_pressed()  # Obtencion de tecla presionada
             for event in pygame.event.get():
-                if self.draw:
-                    self.check_text(event)
+                if self.property_class.draw:  # Eventos para texto de name
+                    self.property_class.check_text(event)
                 if event.type == pygame.QUIT:
                     close = True
                 elif event.type == pygame.MOUSEBUTTONDOWN:
                     position_mouse = pygame.mouse.get_pos()
                     if pygame.mouse.get_pressed()[0]:  # Boton izquierdo
-                        print('L')
-                        if container.recta_new.collidepoint(position_mouse) and cont < 7:  # Agregar pestañas
-                            cont, tag = self.add_container(cont, tag)
-                        cont = self.delete_container(position_mouse, cont)  # Verificar si alguna pestaña se cierra
-                        self.select_container(position_mouse)  # Seleccionar pestaña
-                        self.check_actions(position_mouse)
-                        self.close_elements(position_mouse)
+                        if timer == 0:
+                            timer = 0.001
+                        elif timer < 0.3 and not self.property_class.elem_type:  # Doble click apertura modulo
+                            timer = 0
+                            self.property_class.name_element.active = True  # Activar casilla de nombre propiedades
+                            self.property_class.element_property(position_mouse, 1)  # Activar propiedad elemento
+                            self.property_class.name_element.buffer = [self.property_class.elem_selected]  # Buffer
+                            if self.property_class.type_element == 1:
+                                for container in self.property_class.elementos['containers']:
+                                    for caja in container.cajas:
+                                        if caja.tag == self.property_class.elem_selected:
+                                            self.property_class.box_field1.buffer = [str(caja.alpha)]
+                                            self.property_class.box_field2.buffer = [str(caja.betha)]
+
+                        if self.property_class.container.recta_new.collidepoint(position_mouse) \
+                                and self.property_class.cont < 7:  # Agregar pestañas si son menos de 7
+                            self.property_class.add_container()
+                        self.property_class.delete_container(position_mouse)  # Verificar si alguna pestaña se cierra
+                        self.property_class.select_container(position_mouse)  # Seleccionar pestaña
+                        self.property_class.check_actions(position_mouse)  # verifica acciones
+                        self.property_class.close_elements(position_mouse)  # Cerrar elementos
+                        self.property_class.add_red_elements(position_mouse)
+                        if self.property_class.connecting:  # Si se encuentra la linea de dibujo activa se pueden adicionar elementos a la conexion
+                            if self.property_class.duple_conection == []:  # Esta define la primer conexion
+                                self.property_class.duple_conection.append([self.property_class.init_pos, self.property_class.end_line])
+                                self.property_class.init_pos = self.property_class.end_line
+                            else:
+                                if self.property_class.end_line != self.property_class.duple_conection[0][0]:
+                                    self.property_class.duple_conection.append([self.property_class.init_pos, self.property_class.end_line])
+                                    self.property_class.init_pos = self.property_class.end_line
+                                    for container in self.property_class.elementos['containers']:
+                                        if container.selected:
+                                            for nodo in container.nodos:
+                                                if nodo.rect.collidepoint(self.property_class.end_line):
+                                                    self.property_class.hold_line = False  # Deja de dibujar la linea
+                                                    self.property_class.line_able = False  # Deja de habilitar linea
+                                                    self.property_class.connecting = False  # Deja de conectar
+                                                    self.property_class.elem2 = nodo  # Elemento final de la conexion
+                                                    self.property_class.container.conections.add(Conexion(self.property_class.duple_conection,
+                                                                                                self.property_class.elem1,
+                                                                                                self.property_class.elem2))
+                                                    self.property_class.duple_conection = []
+
+                        if self.property_class.line_able:
+                            self.property_class.hold_line = True
+                        if self.property_class.drawing:  # Poner elemento
+                            self.property_class.put_element()
 
                     elif pygame.mouse.get_pressed()[2]:  # Boton derecho
-                        pass
+                        self.property_class.element_property(position_mouse)
                 elif keys[K_ESCAPE]:  # Acciones al presionar tecla escape
                     position_mouse = self.property_class.cancel()
-
+                    self.property_class.close_elements((0, 0), force=True)
+            if timer != 0:  # Incremento del timer
+                timer += dt
+                if timer >= 0.5:  # Reinicio del timer
+                    timer = 0
             abs_position = pygame.mouse.get_pos()
             self.screen_form.fill(GRAY)
-            self.draw_containers(container, cont)
-            self.properties(abs_position, position_mouse)
-            self.exec_actions(abs_position, position_mouse)
-            if self.actions[6]:
-                self.draw_text()
-                self.draw = True
+            self.property_class.draw_containers(self.screen_form)
+            self.property_class.draw_on_screen(self.screen_form, abs_position, position_mouse)
+            self.property_class.exec_actions(self.screen_form, abs_position, position_mouse)
+            if self.property_class.actions[6] or self.property_class.elem_proper:
+                self.property_class.draw_text(self.screen_form)
+                self.property_class.draw = True
+            if self.property_class.hold_line:  # Dibujando linea en caliente
+                self.property_class.draw_line(self.screen_form)
             self.clock.tick(60)
+            dt = self.clock.tick(30) / 1000  # Delta del timer
             pygame.display.flip()
