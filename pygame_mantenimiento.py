@@ -50,12 +50,28 @@ class PGManten:
                             self.property_class.name_element.active = True  # Activar casilla de nombre propiedades
                             self.property_class.element_property(position_mouse, 1)  # Activar propiedad elemento
                             self.property_class.name_element.buffer = [self.property_class.elem_selected]  # Buffer
-                            if self.property_class.type_element == 1:
-                                for container in self.property_class.elementos['containers']:
+                            #if self.property_class.type_element == 1:  # Valor de los campos de texto
+                            for container in self.property_class.elementos['containers']:
+                                if container.selected:
                                     for caja in container.cajas:
                                         if caja.tag == self.property_class.elem_selected:
                                             self.property_class.box_field1.buffer = [str(caja.alpha)]
                                             self.property_class.box_field2.buffer = [str(caja.betha)]
+                                    for knn_ind in container.knn:
+                                        for col in knn_ind.cols:
+                                            for caja in col:
+                                                if caja.tag == self.property_class.elem_selected:
+                                                    self.property_class.box_field1.buffer = [str(caja.alpha)]
+                                                    self.property_class.box_field2.buffer = [str(caja.betha)]
+                                    for stand_ind in container.stand:
+                                            for caja in stand_ind.cajas:
+                                                if caja.tag == self.property_class.elem_selected:
+                                                    self.property_class.box_field1.buffer = [str(caja.alpha)]
+                                                    self.property_class.box_field2.buffer = [str(caja.betha)]
+                                    for kdn in container.kdn:
+                                        if kdn.tag == self.property_class.elem_selected:
+                                            self.property_class.box_field1.buffer = [str(kdn.alpha)]
+                                            self.property_class.box_field2.buffer = [str(kdn.betha)]
 
                         if self.property_class.container.recta_new.collidepoint(position_mouse) \
                                 and self.property_class.cont < 7:  # Agregar pestañas si son menos de 7
@@ -66,30 +82,43 @@ class PGManten:
                         self.property_class.close_elements(position_mouse)  # Cerrar elementos
                         self.property_class.add_red_elements(position_mouse)
                         if self.property_class.connecting:  # Si se encuentra la linea de dibujo activa se pueden adicionar elementos a la conexion
-                            if self.property_class.duple_conection == []:  # Esta define la primer conexion
-                                self.property_class.duple_conection.append([self.property_class.init_pos, self.property_class.end_line])
+                            self.property_class.duple_conection.append([self.property_class.init_pos, self.property_class.end_line])
+                            if self.property_class.end_line != self.property_class.duple_conection[0][0]:
                                 self.property_class.init_pos = self.property_class.end_line
-                            else:
-                                if self.property_class.end_line != self.property_class.duple_conection[0][0]:
-                                    self.property_class.duple_conection.append([self.property_class.init_pos, self.property_class.end_line])
-                                    self.property_class.init_pos = self.property_class.end_line
-                                    for container in self.property_class.elementos['containers']:
-                                        if container.selected:
-                                            for nodo in container.nodos:
-                                                if nodo.rect.collidepoint(self.property_class.end_line):
-                                                    self.property_class.hold_line = False  # Deja de dibujar la linea
-                                                    self.property_class.line_able = False  # Deja de habilitar linea
-                                                    self.property_class.connecting = False  # Deja de conectar
-                                                    self.property_class.elem2 = nodo  # Elemento final de la conexion
-                                                    self.property_class.container.conections.add(Conexion(self.property_class.duple_conection,
-                                                                                                self.property_class.elem1,
-                                                                                                self.property_class.elem2))
-                                                    self.property_class.duple_conection = []
+                                for container in self.property_class.elementos['containers']:
+                                    if container.selected:
+                                        for nodo in container.nodos:
+                                            if nodo.rect.collidepoint(self.property_class.end_line):
+                                                self.property_class.hold_line = False  # Deja de dibujar la linea
+                                                self.property_class.line_able = False  # Deja de habilitar linea
+                                                self.property_class.connecting = False  # Deja de conectar
+                                                self.property_class.elem2 = nodo  # Elemento final de la conexion
+                                                conexion = Conexion(self.property_class.duple_conection,
+                                                                                            self.property_class.elem1,
+                                                                                            self.property_class.elem2)
+                                                container.conections.add(conexion)
+                                                self.property_class.duple_conection = []
+                                                container.check_node(self.property_class.elem1, self.property_class.elem2)
+                                                #print(container.nodos_sistema)
 
+                            else:
+                                self.property_class.duple_conection.pop()
                         if self.property_class.line_able:
                             self.property_class.hold_line = True
                         if self.property_class.drawing:  # Poner elemento
                             self.property_class.put_element()
+                        if self.property_class.check.recta.collidepoint(position_mouse):
+                            for container in self.property_class.elementos['containers']:
+                                if container.selected:
+                                    for caja in container.cajas:
+                                        if caja.tag == self.property_class.elem_selected:
+                                            caja.orientation = not caja.orientation
+                                            self.property_class.check.push = caja.orientation
+                                            for nodo in caja.nodos:
+                                                container.nodos.remove(nodo)
+                                            caja.calc_nodes()
+                                            for nodo in caja.nodos:
+                                                container.nodos.add(nodo)
 
                     elif pygame.mouse.get_pressed()[2]:  # Boton derecho
                         self.property_class.element_property(position_mouse)

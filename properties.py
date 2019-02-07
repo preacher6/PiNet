@@ -29,6 +29,7 @@ class Property(pygame.sprite.Sprite):
         self.hold_caja = False
         self.hold_knn = False
         self.hold_stand = False
+        self.hold_kdn = False
         self.elementos = {'containers': pygame.sprite.Group(),
                           'opciones': pygame.sprite.Group()}  # Inicializar diccionario de elementos}
         self.actions = [0] * 9
@@ -69,12 +70,13 @@ class Property(pygame.sprite.Sprite):
 
         self.rect_actions(self.pos_button_action)  # Inicializar rectas de las acciones
         self.rect_elements(self.pos_button_elements)  # Inicializar rectas de los elementos
-        exp = TextButton('Exponencial', 'exp', position=(self.pos_proper[0]+65, self.pos_proper[1]+40), size=(72, 30))
-        ray = TextButton('Rayleigh', 'ray', position=(self.pos_proper[0] + 65, self.pos_proper[1]+75), size=(72, 30),
+        exp = TextButton('Exponencial', 'exp', position=(self.pos_proper[0]+116, self.pos_proper[1]+30), size=(72, 30))
+        ray = TextButton('Rayleigh', 'ray', position=(self.pos_proper[0] + 116, self.pos_proper[1]+65), size=(72, 30),
                          text_position=(14, 5))
-        wei = TextButton('Weibull', 'wei', position=(self.pos_proper[0] + 65, self.pos_proper[1] + 110), size=(72, 30),
+        wei = TextButton('Weibull', 'wei', position=(self.pos_proper[0] + 116, self.pos_proper[1] + 100), size=(72, 30),
                          text_position=(18, 5))
         self.text_buttons = [exp, ray, wei]
+        self.check = RadioButton('Check', 'Rotar', position=(self.pos_proper[0]+15, self.pos_proper[1]+130))
 
     # --------------------------------- Relacionado a contenedores------------------------------------------
 
@@ -247,13 +249,30 @@ class Property(pygame.sprite.Sprite):
                                 self.elem_type = True
                             else:
                                 self.elem_proper = True
-                        if stand_ind.rect.collidepoint(pushed):
-                            self.type_element = 3
-                            self.elem_selected = stand_ind.tag
+                    if stand_ind.rect.collidepoint(pushed):
+                        self.type_element = 3
+                        self.elem_selected = stand_ind.tag
+                        if not proper:
+                            self.elem_type = True
+                        else:
+                            self.elem_proper = True
+
+                for kdn in container.kdn:
+                    for caja in kdn.cajas:
+                        if caja.rect.collidepoint(pushed):
+                            self.type_element = 1
+                            self.elem_selected = caja.tag
                             if not proper:
                                 self.elem_type = True
                             else:
                                 self.elem_proper = True
+                    if kdn.rect.collidepoint(pushed):
+                        self.type_element = 4
+                        self.elem_selected = kdn.tag
+                        if not proper:
+                            self.elem_type = True
+                        else:
+                            self.elem_proper = True
 
     def add_red_elements(self, push_position):
         """Agregar o quitar paralelos a un knn"""
@@ -268,10 +287,10 @@ class Property(pygame.sprite.Sprite):
                                         for nodo in container.nodos:
                                             if nodo.name_element == self.elem_selected:
                                                 container.nodos.remove(nodo)
-                                        knn_ind.cols[knn_ind.num_rows].add(Caja((knn_ind.pos[0] + 20,
-                                                                                 knn_ind.pos[1] + knn_ind.num_rows * knn_ind.dt)
-                                                                                , 1,
-                                                                                name=knn_ind.tag + "_" + str(knn_ind.num_rows)))
+                                        caja = Caja((knn_ind.pos[0] + 20, knn_ind.pos[1] + knn_ind.num_rows * knn_ind.dt)
+                                                                                , 1, name=knn_ind.tag + "_" + str(knn_ind.num_rows))
+                                        knn_ind.cols[knn_ind.num_rows].add(caja)
+                                        container.list_box.add_data(caja)  # Agregar item a list box
                                         knn_ind.num_rows += 1
                                         knn_ind.calc_lines()
                                         knn_ind.calc_nodes()
@@ -295,10 +314,12 @@ class Property(pygame.sprite.Sprite):
                                 if recta.collidepoint(push_position):
                                     if knn_ind.tag == self.elem_selected:
                                         if len(knn_ind.cols[ind]) < 7:
-                                            knn_ind.cols[ind].add(Caja((knn_ind.pos[0] + 20+knn_ind.dt*len(knn_ind.cols[ind]),
+                                            caja = Caja((knn_ind.pos[0] + 20+knn_ind.dt*len(knn_ind.cols[ind]),
                                                                         knn_ind.pos[1] + ind * knn_ind.dt),
                                                                         len(knn_ind.cols[ind])+1,
-                                                                        name=knn_ind.tag + "_" + str(ind)))
+                                                                        name=knn_ind.tag + "_" + str(ind))
+                                            knn_ind.cols[ind].add(caja)
+                                            container.list_box.add_data(caja)
 
                             for ind, recta in enumerate(self.rects_knn_reduce):  # Eliminar serie
                                 if recta.collidepoint(push_position):
@@ -340,6 +361,27 @@ class Property(pygame.sprite.Sprite):
                                         stand_ini.calc_nodes()
                                         for nodo in stand_ini.nodos:
                                             container.nodos.add(nodo)
+            elif self.type_element == 4:
+                for container in self.elementos['containers']:
+                    if container.selected:
+                        for kdn in container.kdn:
+                            if self.addline_rect_kdn.collidepoint(push_position):  # Adicionar linea
+                                if kdn.num_rows < 10:
+                                    if kdn.tag == self.elem_selected:
+                                        kdn.num_rows+=1
+                            if self.reduceline_rect_kdn.collidepoint(push_position):  # Adicionar linea
+                                if kdn.num_rows > kdn.num_active:
+                                    if kdn.tag == self.elem_selected:
+                                        kdn.num_rows-=1
+
+                            if self.addline_rect_kdn2.collidepoint(push_position):  # Adicionar linea
+                                if kdn.num_active < kdn.num_rows:
+                                    if kdn.tag == self.elem_selected:
+                                        kdn.num_active+=1
+                            if self.reduceline_rect_kdn2.collidepoint(push_position):  # Adicionar linea
+                                if kdn.num_active <= kdn.num_rows and kdn.num_active>1:
+                                    if kdn.tag == self.elem_selected:
+                                        kdn.num_active-=1
 
     def close_elements(self, position, force=False):
         if self.close_name_rect.collidepoint(position) or force:
@@ -350,7 +392,6 @@ class Property(pygame.sprite.Sprite):
             self.name.buffer = [""]
 
     # --------------Relacionado al texto--------------------------
-
     def text_boxes(self):
         """Cajas de texto disponibles"""
         self.name = TextBox((410, 230, 140, 20), id="name_con", active=True,
@@ -441,6 +482,13 @@ class Property(pygame.sprite.Sprite):
             elemento = self.stand
             self.title = 'stand'
             self.draw_inside_work(screen, position, elemento, valid_workspace)
+        elif self.kdn_mini_rect.collidepoint(pushed) or self.hold_kdn:
+            self.hold_kdn = True
+            valid_workspace = pygame.Rect(self.pos_workspace[0], self.pos_workspace[1],
+                                          self.SIZE_WORKSPACE[0] - 200, self.SIZE_WORKSPACE[1] - 180)
+            elemento = self.kdn
+            self.title = 'kdn'
+            self.draw_inside_work(screen, position, elemento, valid_workspace)
 
     def draw_inside_work(self, screen, position, elemento, space):
         """Funcion para definir la manera en q se ubica el elemento dependiendo de donde se encuentre"""
@@ -471,6 +519,8 @@ class Property(pygame.sprite.Sprite):
                     for nodo in caja.nodos:
                         container.nodos.add(nodo)
                     container.cajas.add(caja)
+                    container.own_items.append(caja.tag)
+                    container.items.add(caja)
         elif self.hold_knn:
             for container in self.elementos['containers']:
                 if container.selected:
@@ -482,6 +532,8 @@ class Property(pygame.sprite.Sprite):
                     for nodo in knn.nodos:
                         container.nodos.add(nodo)
                     container.knn.add(knn)
+                    container.own_items.append(knn.tag)
+                    container.items.add(knn)
         elif self.hold_stand:
             for container in self.elementos['containers']:
                 if container.selected:
@@ -492,6 +544,20 @@ class Property(pygame.sprite.Sprite):
                     for nodo in stand.nodos:
                         container.nodos.add(nodo)
                     container.stand.add(stand)
+                    container.own_items.append(stand.tag)
+                    container.items.add(stand)
+        elif self.hold_kdn:
+            for container in self.elementos['containers']:
+                if container.selected:
+                    container.cont_kdn += 1
+                    kdn = Kdn(self.put_position, container.cont_kdn)
+                    for caja in kdn.cajas:
+                        container.list_box.add_data(caja)
+                    for nodo in kdn.nodos:
+                        container.nodos.add(nodo)
+                    container.kdn.add(kdn)
+                    container.own_items.append(kdn.tag)
+                    container.items.add(kdn)
 
     def draw_grid(self, screen, screen_pos):
         """Dibujar rejilla"""
@@ -532,6 +598,8 @@ class Property(pygame.sprite.Sprite):
                                         caja.betha = "".join(self.box_field2.buffer)
                                         self.elem_proper = False
                                 for knn_ind in container.knn:
+                                    if knn_ind.tag == self.elem_selected:
+                                        knn_ind.tag = "".join(self.name_element.buffer)
                                     for set_boxes in knn_ind.cols:
                                         for caja in set_boxes:
                                             if caja.tag == self.elem_selected:
@@ -546,16 +614,50 @@ class Property(pygame.sprite.Sprite):
                                             caja.alpha = "".join(self.box_field1.buffer)
                                             caja.betha = "".join(self.box_field2.buffer)
                                             self.elem_proper = False
+                                for kdn in container.kdn:
+                                    if kdn.tag == self.elem_selected:
+                                        kdn.tag == "".join(self.name_element.buffer)
+                                        kdn.alpha = "".join(self.box_field1.buffer)
+                                        kdn.betha = "".join(self.box_field2.buffer)
+                                        self.elem_proper = False
+
+                    if self.ok_rect.collidepoint(push_position):  # Si se presiona sobre ok
+                        for container in self.elementos['containers']:
+                            if container.selected:
+                                for knn in container.knn:
+                                    if knn.tag == self.elem_selected:
+                                        knn.tag = "".join(self.name_element.buffer)
+                                        self.elem_proper = False
                 if self.elem_type:
                     self.type_surface(screen, position, push_position)
+
             elif elemento.name == 'plot':
                 if elemento.active:
                     for container in self.elementos['containers']:
                         if container.selected:
-                            screen.blit(self.plot_surface, self.pos_plot)
-                            container.list_box.draw(screen)
-                            container.list_box.consult_position(push_position)
-                            screen.blit(self.canvas_space(self.fig), (310, 240))
+                            if len(container.list_box.list_items) > 0:
+                                screen.blit(self.plot_surface, self.pos_plot)
+                                container.list_box.draw(screen)
+                                container.list_box.consult_position(push_position)
+                                screen.blit(self.canvas_space(self.fig), (310, 240))
+                            else:
+                                elemento.active = False
+                                for elem in self.elementos['opciones']:
+                                    if elem.name == 'module':
+                                        elem.active = True
+
+            elif elemento.name == 'play':
+                if elemento.active:
+                    for container in self.elementos['containers']:
+                        if container.selected:
+                            if container.correct:
+                                screen.blit(self.plot_surface, self.pos_plot)
+                                container.system_plot()
+                                screen.blit(self.canvas_space(self.fig), (310, 240))
+                                t = 600
+                                screen.blit(self.font.render('La confiabilidad del sistema es: '+str(round(eval(container.plot_all)*100,3))+'%' , True, (0, 0, 0)), (80, 300))
+                                screen.blit(self.font.render('La inconfiabilidad del sistema es: ' + str(
+                                    round((1-eval(container.plot_all)) * 100, 3)) + '%', True, (0, 0, 0)), (80, 330))
 
     def cancel(self):
         """Cancelar acciones en ejecución"""
@@ -563,6 +665,7 @@ class Property(pygame.sprite.Sprite):
         self.hold_caja = False
         self.hold_knn = False
         self.hold_stand = False
+        self.hold_kdn = False
         self.elem_proper = False
         self.elem_type = False
         self.line_able = False
@@ -582,7 +685,7 @@ class Property(pygame.sprite.Sprite):
         self.button_act_panel = pygame.Surface((150, 120))  # Superficie para las acciones
         self.button_act_panel.fill(WHITE)
         self.pos_button_elements = (580, 10)  # Inicio de posiciones acciones
-        self.button_ele_panel = pygame.Surface((200, 120))  # Superficie para las acciones
+        self.button_ele_panel = pygame.Surface((260, 120))  # Superficie para las acciones
         self.button_ele_panel.fill(WHITE)
         self.pos_rename = (400, 180)  # inicio espacio de trabajo
         self.rename_panel = pygame.Surface((200, 90))  # Superficie para las acciones
@@ -609,7 +712,7 @@ class Property(pygame.sprite.Sprite):
 
     def proper_surface(self, screen, position):
         """Superficie para propiedades del elemento seleccionado"""
-        if self.type_element == 1:  # Aca se identifica si el panel es para caja, knn o standby
+        if self.type_element == 1 or self.type_element == 4:  # Aca se identifica si el panel es para caja, knn o standby
             screen.blit(self.proper_panel, self.pos_proper)
         else:
             screen.blit(self.rename_panel, self.pos_rename)
@@ -664,9 +767,11 @@ class Property(pygame.sprite.Sprite):
 
         elif self.type_element == 2:
             for container in self.elementos['containers']:
-                for knn_ind in container.knn:
-                    if knn_ind.tag == self.elem_selected:
-                        self.text_status = [0, 0, 0, 0, 1]
+                if container.selected:
+                    for knn_ind in container.knn:
+                        print(knn_ind.tag)
+                        if knn_ind.tag == self.elem_selected:
+                            self.text_status = [0, 0, 0, 0, 1]
 
             if self.ok_rect.collidepoint(position):
                 screen.blit(self.ok_s, self.ok_rect)
@@ -674,7 +779,7 @@ class Property(pygame.sprite.Sprite):
                             (position[0] + 8, position[1] + 8))
             else:
                 screen.blit(self.ok_n, self.ok_rect)
-        elif self.type_element == 3:
+        elif self.type_element == 3:  # Stand by
             self.text_status = [0, 0, 0, 0, 1]
             if self.ok_rect.collidepoint(position):
                 screen.blit(self.ok_s, self.ok_rect)
@@ -683,13 +788,42 @@ class Property(pygame.sprite.Sprite):
             else:
                 screen.blit(self.ok_n, self.ok_rect)
 
+        elif self.type_element == 4:  # KDN
+            screen.blit(self.font.render('Alpha: ', True, (0, 0, 0)),
+                        (self.pos_proper[0] + 25, self.pos_proper[1] + 70))
+            screen.blit(self.font.render('Betha: ', True, (0, 0, 0)),
+                        (self.pos_proper[0] + 25, self.pos_proper[1] + 100))
+            for container in self.elementos['containers']:
+                for kdn in container.kdn:
+                    if kdn.tag == self.elem_selected:
+                        if kdn.mod == 'exp':
+                            self.text_status = [0, 1, 0, 0, 0]
+                        elif caja.mod == 'ray':
+                            self.text_status = [0, 0, 1, 0, 0]
+                        elif caja.mod == 'wei':
+                            self.text_status = [0, 0, 0, 1, 0]
+                if self.ok_rect2.collidepoint(position):
+                    screen.blit(self.ok_s, self.ok_rect2)
+                    screen.blit(self.font.render('Aceptar', True, (0, 0, 0)),
+                                (position[0] + 8, position[1] + 8))
+                else:
+                    screen.blit(self.ok_n, self.ok_rect2)
+
     def type_surface(self, screen, position, pushed):
         """Superifice para tipo del elemento seleccionado"""
         if self.type_element == 1:  # Propiedades para caja sola
             screen.blit(self.proper_panel, self.pos_proper)
             screen.blit(self.close, self.close_name_rect)
-            screen.blit(self.font.render('Tipo confiabilidad '+self.elem_selected, True, (0, 0, 0)),
-                        (self.pos_proper[0] + 10, self.pos_proper[1] + 10))
+            screen.blit(self.font.render('Estructura '+self.elem_selected, True, (0, 0, 0)),
+                        (self.pos_proper[0] + 10, self.pos_proper[1] + 5))
+            screen.blit(self.font.render('Tipo Distribución: ', True, (0, 0, 0)),
+                        (self.pos_proper[0] + 10, self.pos_proper[1] + 30))
+            self.check.draw(screen)
+            for container in self.elementos['containers']:
+                if container.selected:
+                    for caja in container.cajas:
+                        if caja.tag == self.elem_selected:
+                            self.check.push = not caja.orientation
             for textbutton in self.text_buttons:  # Recorrer todos los botones de texto
                 textbutton.draw_button(screen)  # Dibujar el boton
                 if textbutton.recta.collidepoint(position):  # Si se pasa sobr eel boton
@@ -740,6 +874,8 @@ class Property(pygame.sprite.Sprite):
                 screen.blit(self.reduceline_n, self.reduceline_rect)
 
             for ind, recta in enumerate(self.rects_knn_add):  # Recta de agregar series
+                screen.blit(self.font.render('Paralelo ' + str(ind+1) + ':', True, (0, 0, 0)),
+                            (self.pos_proper[0] + 35, (self.pos_proper[1] + 75) + (ind*35)))
                 for container in self.elementos['containers']:
                     if container.selected:
                         for knn_ind in container.knn:
@@ -752,6 +888,7 @@ class Property(pygame.sprite.Sprite):
                                     screen.blit(self.addline_n, recta)
                             else:
                                 screen.blit(self.addline_not, recta)
+
 
             for ind, recta in enumerate(self.rects_knn_reduce):  # Rectar de reducir series
                 for container in self.elementos['containers']:
@@ -794,6 +931,68 @@ class Property(pygame.sprite.Sprite):
             else:
                 screen.blit(self.reduceline_n, self.reduceline_rect)
 
+        elif self.type_element == 4:
+            screen.blit(self.proper_panel, self.pos_proper)
+            screen.blit(self.close, self.close_name_rect)
+            screen.blit(self.font.render('Estructura ' + self.elem_selected, True, (0, 0, 0)),
+                        (self.pos_proper[0] + 10, self.pos_proper[1] + 5))
+            screen.blit(self.font.render('Tipo Distribución: ', True, (0, 0, 0)),
+                        (self.pos_proper[0] + 10, self.pos_proper[1] + 30))
+            for textbutton in self.text_buttons:  # Recorrer todos los botones de texto
+                textbutton.draw_button(screen)  # Dibujar el boton
+                if textbutton.recta.collidepoint(position):  # Si se pasa sobr eel boton
+                    textbutton.over = True  # Se marca como sobrepuesto
+                    if textbutton.recta.collidepoint(pushed):  # Se presiona el boton
+                        for container in self.elementos['containers']:  # Buscar contenedor actual
+                            if container.selected:
+                                for kdn in container.kdn:
+                                    if kdn.tag == self.elem_selected:
+                                        kdn.mode = textbutton.name
+                else:
+                    textbutton.over = False
+
+            num_rows = 1
+            num_active = 1
+            for container in self.elementos['containers']:
+                if container.selected:
+                    for kdn in container.kdn:
+                        if kdn.tag == self.elem_selected:
+                            num_rows = kdn.num_rows
+                            num_active = kdn.num_active
+            screen.blit(self.font.render('n: ' + str(num_rows), True, (0, 0, 0)),
+                        (self.pos_proper[0] + 10, self.pos_proper[1] + 80))
+            screen.blit(self.font.render('K: ' + str(num_active), True, (0, 0, 0)),
+                        (self.pos_proper[0] + 10, self.pos_proper[1] + 110))
+
+            if self.addline_rect_kdn.collidepoint(position):
+                screen.blit(self.addline_s, self.addline_rect_kdn)
+                screen.blit(self.font.render('Agregar elemento', True, (0, 0, 0)),
+                            (position[0] + 8, position[1] + 8))
+            else:
+                screen.blit(self.addline_n, self.addline_rect_kdn)
+
+            if self.reduceline_rect_kdn.collidepoint(position):
+                screen.blit(self.reduceline_s, self.reduceline_rect_kdn)
+                screen.blit(self.font.render('Eliminar elemento', True, (0, 0, 0)),
+                            (position[0] + 8, position[1] + 8))
+            else:
+                screen.blit(self.reduceline_n, self.reduceline_rect_kdn)
+
+
+            if self.addline_rect_kdn2.collidepoint(position):
+                screen.blit(self.addline_s, self.addline_rect_kdn2)
+                screen.blit(self.font.render('Agregar elemento', True, (0, 0, 0)),
+                            (position[0] + 8, position[1] + 8))
+            else:
+                screen.blit(self.addline_n, self.addline_rect_kdn2)
+
+            if self.reduceline_rect_kdn2.collidepoint(position):
+                screen.blit(self.reduceline_s, self.reduceline_rect_kdn2)
+                screen.blit(self.font.render('Eliminar elemento', True, (0, 0, 0)),
+                            (position[0] + 8, position[1] + 8))
+            else:
+                screen.blit(self.reduceline_n, self.reduceline_rect_kdn2)
+
     def name_surface(self, screen, position):
         screen.blit(self.rename_panel, self.pos_rename)
         screen.blit(self.close, self.close_name_rect)
@@ -823,6 +1022,8 @@ class Property(pygame.sprite.Sprite):
         self.close = pygame.image.load(os.path.join('icons', 'close.png'))
         self.add = pygame.image.load(os.path.join('icons', 'add.png'))
         self.grid = pygame.image.load(os.path.join('pics', 'punto.png'))
+        self.check = pygame.image.load(os.path.join('icons', 'check.png'))
+        self.uncheck = pygame.image.load(os.path.join('icons', 'uncheck.png'))
         # Acciones
         self.connect_n = pygame.image.load(os.path.join('icons', 'connect_n.png'))
         self.connect_s = pygame.image.load(os.path.join('icons', 'connect_s.png'))
@@ -848,10 +1049,12 @@ class Property(pygame.sprite.Sprite):
         self.caja_mini = pygame.image.load(os.path.join('pics', 'caja_mini.png'))
         self.stand_mini = pygame.image.load(os.path.join('pics', 'stand_by_mini.png'))
         self.knn_mini = pygame.image.load(os.path.join('pics', 'knn_mini.png'))
+        self.kdn_mini = pygame.image.load(os.path.join('pics', 'kdn_mini.png'))
         # Normales
         self.caja = pygame.image.load(os.path.join('pics', 'caja.png'))
         self.stand = pygame.image.load(os.path.join('pics', 'stand_by.png'))
         self.knn = pygame.image.load(os.path.join('pics', 'knn.png'))
+        self.kdn = pygame.image.load(os.path.join('pics', 'kdn.png'))
         #Acciones
         self.line_on = pygame.image.load(os.path.join('pics', 'linea_on.png'))
         self.line_off = pygame.image.load(os.path.join('pics', 'linea_off.png'))
@@ -902,6 +1105,18 @@ class Property(pygame.sprite.Sprite):
         self.reduceline_rect = self.reduceline_n.get_rect()
         self.reduceline_rect.x = self.pos_proper[0] + 145
         self.reduceline_rect.y = self.pos_proper[1] + 35
+        self.addline_rect_kdn = self.addline_n.get_rect()
+        self.addline_rect_kdn.x = self.pos_proper[0] + 35
+        self.addline_rect_kdn.y = self.pos_proper[1] + 75
+        self.reduceline_rect_kdn = self.reduceline_n.get_rect()
+        self.reduceline_rect_kdn.x = self.pos_proper[0] + 65
+        self.reduceline_rect_kdn.y = self.pos_proper[1] + 75
+        self.addline_rect_kdn2 = self.addline_n.get_rect()
+        self.addline_rect_kdn2.x = self.pos_proper[0] + 35
+        self.addline_rect_kdn2.y = self.pos_proper[1] + 104
+        self.reduceline_rect_kdn2 = self.reduceline_n.get_rect()
+        self.reduceline_rect_kdn2.x = self.pos_proper[0] + 65
+        self.reduceline_rect_kdn2.y = self.pos_proper[1] + 104
         self.rects_knn_add = []
         self.rects_knn_reduce = []
         for number in range(5):
@@ -913,6 +1128,9 @@ class Property(pygame.sprite.Sprite):
             recta_add.x = self.pos_proper[0] + 110
             recta_add.y = self.pos_proper[1] + 35 * (number + 2)
             self.rects_knn_add.append(recta_add)
+        self.rect_check_orien = self.check.get_rect()
+        self.rect_check_orien.x = self.pos_proper[0]+100
+        self.rect_check_orien.y = self.pos_proper[0] + 160
 
     def draw_actions(self, screen, position):
         if self.connect_rect.collidepoint(position):
@@ -988,12 +1206,16 @@ class Property(pygame.sprite.Sprite):
         self.stand_mini_rect = self.stand_mini.get_rect()
         self.stand_mini_rect.x = position[0] + 125
         self.stand_mini_rect.y = position[1] + 40
+        self.kdn_mini_rect = self.kdn_mini.get_rect()
+        self.kdn_mini_rect.x = position[0] + 195
+        self.kdn_mini_rect.y = position[1] + 40
 
     def draw_elements(self, screen):
         """Dibujar elementos a seleccionar (caja-mini, stand-by y knn)"""
         screen.blit(self.caja_mini, self.caja_mini_rect)
         screen.blit(self.knn_mini, self.knn_mini_rect)
         screen.blit(self.stand_mini, self.stand_mini_rect)
+        screen.blit(self.kdn_mini, self.kdn_mini_rect)
 
     @staticmethod
     def canvas_space(fig):

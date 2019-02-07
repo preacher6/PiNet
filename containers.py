@@ -1,7 +1,11 @@
 import pygame
 import os
+import numpy as np
+import matplotlib.pyplot as plt
 from objects import *
 from textbox import ListBox
+from collections import defaultdict
+
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
@@ -113,9 +117,19 @@ class Container(pygame.sprite.Sprite):
         self.cont_knn = 0
         self.stand = pygame.sprite.Group()
         self.cont_stand = 0
+        self.kdn = pygame.sprite.Group()
+        self.cont_kdn = 0
         self.nodos = pygame.sprite.Group()  # Guarda los nodos disponibles para el contenedor
         self.conections = pygame.sprite.Group()  # Guarda las conexiones del contenedor
         self.list_box = ListBox()
+        self.own_items = []
+        self.items = pygame.sprite.Group()
+        self.keys = [chr(97+value) for value in range(36)]
+        self.ini_tag = self.keys[0]
+        self.nodos_sistema = {key:pygame.sprite.Group() for key in self.keys}  # Define los nodos del sistema
+        self.correct = False  # Indica si es posible obtener confiabilidad del sistema
+        self.time = 600
+        self.plot_all = 0
         self.init_containter()
 
     def load_pics(self):
@@ -167,7 +181,9 @@ class Container(pygame.sprite.Sprite):
         self.limites.add(Init((self.pos_elem[0]+40, self.pos_elem[1]+241)))
         self.limites.add(End((self.pos_elem[0]+860, self.pos_elem[1]+241)))
         for limite in self.limites:
-            self.nodos.add(limite.nodo)
+            self.nodos.add(limite.nodos)
+            self.own_items.append(limite.tag)
+            self.items.add(limite)
 
     def draw_cont(self, screen):
         """Dibujar icono de pestaña"""
@@ -201,17 +217,21 @@ class Container(pygame.sprite.Sprite):
         for knn_ind in self.knn:
             knn_ind.draw(screen)
 
-        for stand_in in self.stand:
-            stand_in.draw(screen)
+        for stand_ind in self.stand:
+            stand_ind.draw(screen)
+
+        for kdn_in in self.kdn:
+            kdn_in.draw(screen)
 
         for conex_in in self.conections:
             conex_in.draw(screen)
             for limite in self.limites:  # Conexiones de limites
-                if conex_in.elem1.name_element == limite.nodo.name_element and conex_in.elem1.id == limite.nodo.id:
-                    limite.nodo.connected = True
+                for nodo in limite.nodos:  # Se recorre un for para ver si algun elemento ha sido conectado
+                    if conex_in.elem1.name_element == nodo.name_element and conex_in.elem1.id == nodo.id:
+                        nodo.connected = True
 
-                if conex_in.elem2.name_element == limite.nodo.name_element and conex_in.elem2.id == limite.nodo.id:
-                    limite.nodo.connected = True
+                    if conex_in.elem2.name_element == nodo.name_element and conex_in.elem2.id == nodo.id:
+                        nodo.connected = True
 
             for caja in self.cajas:  # Conexiones de cajas
                 for nodo in caja.nodos:  # Se recorre un for para ver si algun elemento ha sido conectado
@@ -237,6 +257,157 @@ class Container(pygame.sprite.Sprite):
                     if conex_in.elem2.name_element == nodo.name_element and conex_in.elem2.id == nodo.id:
                         nodo.connected = True
 
+            for kdn_ind in self.kdn:  # Conexiones de knn
+                for nodo in kdn_ind.nodos:  # Se recorre un for para ver si algun elemento ha sido conectado
+                    if conex_in.elem1.name_element == nodo.name_element and conex_in.elem1.id == nodo.id:
+                        nodo.connected = True
+
+                    if conex_in.elem2.name_element == nodo.name_element and conex_in.elem2.id == nodo.id:
+                        nodo.connected = True
+
+        self.valid_nodes = 0  # Define cuantos nodos se encuentran desconectados
+        for nodo in self.nodos:
+            if not nodo.connected:
+                self.valid_nodes += 1
+        if self.valid_nodes == 0 and len(self.nodos)>0:
+            self.build_matriz()
+
+    def build_matriz(self):
+        """Funcion para construir matriz de incidencia"""
+        nro_nodos_sistema = len(self.nodos) - len(self.conections)
+        nro_items = len(self.own_items)
+        print('nodos: ', nro_nodos_sistema)
+        print('items: ', nro_items)
+        self.matriz_inc = np.zeros((nro_items,
+                                    nro_nodos_sistema + 1), dtype=object)  # La columna extra es para almacenar el valor de la confiabilidad para ese elemento
+        node = 0
+        for value, item in enumerate(self.own_items):
+            self.matriz_inc[value][nro_nodos_sistema] = \
+            [element_ind.value for element_ind in self.items if element_ind.tag == item][0]
+
+        for key in self.keys:
+            if len(self.nodos_sistema[key]) > 0:
+                for nodo in self.nodos_sistema[key]:
+                    element = self.own_items.index(nodo.name_element)
+                    self.matriz_inc[element][node] = 1
+                node += 1
+        print('---------')
+        print(self.matriz_inc)
+        matriz_inc = self.matriz_inc.copy()
+        del_row = []
+        ana_rows = []
+        num_iter = 0
+        irreduced = False
+        while num_iter < 30:
+            num_iter += 1
+            for index, row in enumerate(matriz_inc):  # Paralelos
+                row_n = row[:-1]  # Toma solo la parte que indica incidencia
+                if row_n.tolist() not in ana_rows:  # almacena las filas que no hayan sido evaluadas
+                    ana_rows.append(row_n.tolist())
+                    put = False
+                    for index_2, row_2 in enumerate(matriz_inc):
+                        rown_2 = row_2[:-1]
+                        if index != index_2:  # Verifica que no sea la misma posicion que se encuentra evaluando
+                            if (row_n == rown_2).all():  # Compara si los arreglos son iguales
+                                del_row.append(index_2)  # Almacena la posicion del arreglo a eliminar
+                                put = True
+                                if matriz_inc[index, -1].startswith('('):
+                                    matriz_inc[index, -1] = matriz_inc[index, -1] +'*(1-' + matriz_inc[
+                                        index_2, -1] + ')'
+                                else:
+                                    matriz_inc[index, -1] = '(1-('+matriz_inc[index, -1]+'))*(1-('+ matriz_inc[index_2, -1]+'))'
+                    if matriz_inc[index, -1].startswith("(") and put:
+                        matriz_inc[index, -1] = '(1-('+matriz_inc[index, -1]+'))'
+
+            matriz_inc = np.delete(matriz_inc, del_row, 0)
+            del_row = []
+            ana_rows = []
+            if matriz_inc.shape[0] == 3:
+                break
+            for index, column in enumerate(matriz_inc[:, :-1].T):  # Series
+                index_col = np.nonzero(column)[0]
+                if np.sum(column) == 2:
+                    row_1 = matriz_inc[index_col[0], :-1]
+                    row_2 = matriz_inc[index_col[1], :-1]
+                    if np.sum(row_1) == 2 and np.sum(row_2) == 2:
+                        new_row = abs(row_1 - row_2)
+                        matriz_inc[index_col[0], :-1] = new_row
+                        del_row.append(index_col[1])
+                        matriz_inc[index_col[0], -1] = matriz_inc[index_col[0], -1] + '*' + matriz_inc[index_col[1], -1]
+                        break
+            matriz_inc = np.delete(matriz_inc, del_row, 0)
+            del_row = []
+        else:
+            irreduced = True
+        print('final: ')
+        print(matriz_inc)
+        if irreduced:
+            self.correct = False
+            print('El sistema es irreducible')
+            g = Graph(matriz_inc.shape[1])
+
+        else:
+            self.correct = True
+            self.plot_all = matriz_inc[2, -1]
+            print('El sistema es reducible')
+            t = 600
+            print('La confiabilidad del sistema es: ', eval(matriz_inc[2, -1])*100)
+            print('La inconfiabilidad del sistema es: ', (1-eval(matriz_inc[2, -1]))*100)
+
+    def check_node(self, elem1, elem2):
+        if len(self.nodos_sistema[self.ini_tag]) == 0:
+            self.nodos_sistema[self.ini_tag].add(elem1)
+            self.nodos_sistema[self.ini_tag].add(elem2)
+        else:
+            for key in self.keys:
+                found = False
+                repeated = False
+                for elem in self.nodos_sistema[key]:
+                    if elem1 == elem:
+                        self.nodos_sistema[key].add(elem2)
+                        for key_new in self.keys:
+                            if key_new != key and not repeated:
+                                for elem_new in self.nodos_sistema[key_new]:
+                                    if elem_new in self.nodos_sistema[key]:
+                                        for dep_elem in self.nodos_sistema[key_new]:
+                                            self.nodos_sistema[key].add(dep_elem)
+                                        self.nodos_sistema[key_new] = pygame.sprite.Group()
+                                        repeated = True
+                                        break
+                        found = True
+                        break
+                    elif elem2 == elem:
+                        self.nodos_sistema[key].add(elem1)
+                        for key_new in self.keys:
+                            if key_new != key and not repeated:
+                                for elem_new in self.nodos_sistema[key_new]:
+                                    if elem_new in self.nodos_sistema[key]:
+                                        for dep_elem in self.nodos_sistema[key_new]:
+                                            self.nodos_sistema[key].add(dep_elem)
+                                        self.nodos_sistema[key_new] = pygame.sprite.Group()
+                                        repeated = True
+                                        break
+                        found = True
+                        break
+                if found:
+                    break
+            if found == False:
+                for key in self.keys:
+                    if len(self.nodos_sistema[key]) == 0:
+                        self.nodos_sistema[key].add(elem1)
+                        self.nodos_sistema[key].add(elem2)
+                        break
+
+    def system_plot(self):
+        t = np.linspace(0, self.time, 500)
+        plt.style.use('seaborn')  # pretty matplotlib plots
+        plt.cla()
+        print('all', self.plot_all)
+        plt.plot(t, eval(self.plot_all), c='blue',)
+        plt.xlabel('t')
+        plt.ylabel(r'$p(t|\beta,\alpha)$')
+        #plt.title(self.types[elemento.mod])
+        #plt.legend()
 
 class TextButton:
     def __init__(self, text, name, position=(0, 0), size=(90, 30), text_position=(5, 5)):
@@ -266,3 +437,58 @@ class TextButton:
             self.font.set_underline(False)
         screen.blit(self.own_surface, self.position)
         pygame.draw.rect(screen, BLACK, self.recta, 1)
+
+
+# This class represents a directed graph
+# using adjacency list representation
+class Graph:
+
+    def __init__(self, vertices):
+        # No. of vertices
+        self.V = vertices
+
+        # default dictionary to store graph
+        self.graph = defaultdict(list)
+
+        # function to add an edge to graph
+
+    def addEdge(self, u, v):
+        self.graph[u].append(v)
+
+    '''A recursive function to print all paths from 'u' to 'd'. 
+    visited[] keeps track of vertices in current path. 
+    path[] stores actual vertices and path_index is current 
+    index in path[]'''
+
+    def printAllPathsUtil(self, u, d, visited, path):
+
+        # Mark the current node as visited and store in path
+        visited[u] = True
+        path.append(u)
+
+        # If current vertex is same as destination, then print
+        # current path[]
+        if u == d:
+            print(path)
+        else:
+            # If current vertex is not destination
+            # Recur for all the vertices adjacent to this vertex
+            for i in self.graph[u]:
+                if visited[i] == False:
+                    self.printAllPathsUtil(i, d, visited, path)
+
+                    # Remove current vertex from path[] and mark it as unvisited
+        path.pop()
+        visited[u] = False
+
+    # Prints all paths from 's' to 'd'
+    def printAllPaths(self, s, d):
+
+        # Mark all the vertices as not visited
+        visited = [False] * (self.V)
+
+        # Create an array to store paths
+        path = []
+
+        # Call the recursive helper function to print all paths
+        self.printAllPathsUtil(s, d, visited, path)

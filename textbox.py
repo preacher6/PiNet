@@ -1,4 +1,5 @@
 import string
+import os
 import pygame
 import numpy as np
 from scipy.stats import dweibull
@@ -8,6 +9,7 @@ import matplotlib.pyplot as plt
 WHITE = (255, 255, 255)
 BLUE = (65, 105, 225)
 BLACK = (0, 0, 0)
+GRAY = (128, 128, 128)
 ACCEPTED = string.ascii_letters + '_-.' + string.digits
 
 
@@ -74,7 +76,7 @@ class TextBox(object):
                                            self.render_rect.height)
             else:
                 self.render_area = self.rendered.get_rect(topleft=(0, 0))
-        if pygame.time.get_ticks()-self.blink_timer > 300:
+        if pygame.time.get_ticks() - self.blink_timer > 300:
             self.blink = not self.blink
             self.blink_timer = pygame.time.get_ticks()
 
@@ -105,7 +107,7 @@ class ListBox:
         self.rects = []
         self.num_rects = 7  # Número de rectas dentro del listbox
         self.font = pygame.font.SysFont('Arial', 14)
-        self.time = np.linspace(0, 5, 1000)
+        self.time = np.linspace(0, 8760, 1000)
         self.make_rects()
         self.types = {'exp': 'Distribución Exponencial', 'ray': 'Distribución Rayleigh', 'wei': 'Distribución Weibull'}
 
@@ -138,12 +140,48 @@ class ListBox:
         self.make_plot(caja)
 
     def make_plot(self, elemento):
-        dist = dweibull(float(elemento.betha), 0, float(elemento.alpha))
+        #dist = dweibull(float(elemento.betha), 0, float(elemento.alpha))
         plt.style.use('seaborn')  # pretty matplotlib plots
         plt.cla()
-        plt.plot(self.time, dist.pdf(self.time), c='blue',
+        #plt.plot(self.time, dist.pdf(self.time), c='blue',
+                 #label=r'$\beta=%.3f,\ \alpha=%.3f$' % (float(elemento.betha), float(elemento.alpha)))
+        t = self.time
+        plt.plot(self.time, eval(elemento.value), c='blue',
                  label=r'$\beta=%.3f,\ \alpha=%.3f$' % (float(elemento.betha), float(elemento.alpha)))
         plt.xlabel('t')
         plt.ylabel(r'$p(t|\beta,\alpha)$')
         plt.title(self.types[elemento.mod])
         plt.legend()
+
+
+class RadioButton:
+    def __init__(self, name, texto, position=(0, 0), size=(26, 26), color=GRAY, active=False):
+        self.name = name
+        self.no_pushed = pygame.image.load(os.path.join("icons", "uncheck.png"))
+        self.pushed = pygame.image.load(os.path.join("icons", "check.png"))
+        self.text = texto
+        self.position = position
+        self.size = size
+        self.color = color
+        self.own_surface = pygame.Surface(size)
+        self.own_surface.fill(self.color)
+        self.own_surface.blit(self.no_pushed, (0, 0))
+        self.font = pygame.font.SysFont('Arial', 14)
+        self.recta = pygame.Rect(self.position[0], self.position[1], self.size[0], self.size[1])
+        self.over = False
+        self.push = active
+
+    def draw(self, screen):
+        if self.over:
+            screen.blit(self.font.render(self.text, True, BLACK), (self.position[0] + 28, self.position[1] + 5))
+            self.font.set_underline(True)
+        else:
+            screen.blit(self.font.render(self.text, True, BLACK), (self.position[0] + 28, self.position[1] + 5))
+            self.font.set_underline(False)
+        if self.push:
+            self.own_surface.fill(self.color)
+            self.own_surface.blit(self.pushed, (0, 0))
+        else:
+            self.own_surface.fill(self.color)
+            self.own_surface.blit(self.no_pushed, (0, 0))
+        screen.blit(self.own_surface, self.position)
