@@ -113,23 +113,31 @@ class Container(pygame.sprite.Sprite):
         self.limites = pygame.sprite.Group()
         self.cajas = pygame.sprite.Group()
         self.cont_cajas = 0
+        self.all_cajas = 0
         self.knn = pygame.sprite.Group()
         self.cont_knn = 0
+        self.all_knn = 0
         self.stand = pygame.sprite.Group()
         self.cont_stand = 0
+        self.all_stand = 0
         self.kdn = pygame.sprite.Group()
         self.cont_kdn = 0
+        self.all_kdn = 0
+        self.module = pygame.sprite.Group()
+        self.cont_module = 0
+        self.all_module = 0
         self.nodos = pygame.sprite.Group()  # Guarda los nodos disponibles para el contenedor
         self.conections = pygame.sprite.Group()  # Guarda las conexiones del contenedor
         self.list_box = ListBox()
-        self.own_items = []
-        self.items = pygame.sprite.Group()
+        self.own_items = []  # Lista elementos propios
+        self.items = pygame.sprite.Group()  # Grupo sprites de elementos
         self.keys = [chr(97+value) for value in range(36)]
         self.ini_tag = self.keys[0]
         self.nodos_sistema = {key:pygame.sprite.Group() for key in self.keys}  # Define los nodos del sistema
         self.correct = False  # Indica si es posible obtener confiabilidad del sistema
         self.time = 600
         self.plot_all = 0
+        self.all_connected = False
         self.init_containter()
 
     def load_pics(self):
@@ -223,6 +231,9 @@ class Container(pygame.sprite.Sprite):
         for kdn_in in self.kdn:
             kdn_in.draw(screen)
 
+        for module in self.module:
+            module.draw(screen)
+
         for conex_in in self.conections:
             conex_in.draw(screen)
             for limite in self.limites:  # Conexiones de limites
@@ -265,35 +276,53 @@ class Container(pygame.sprite.Sprite):
                     if conex_in.elem2.name_element == nodo.name_element and conex_in.elem2.id == nodo.id:
                         nodo.connected = True
 
+            for module in self.module:
+                for nodo in module.nodos:  # Se recorre un for para ver si algun elemento ha sido conectado
+                    if conex_in.elem1.name_element == nodo.name_element and conex_in.elem1.id == nodo.id:
+                        nodo.connected = True
+
+                    if conex_in.elem2.name_element == nodo.name_element and conex_in.elem2.id == nodo.id:
+                        nodo.connected = True
+
         self.valid_nodes = 0  # Define cuantos nodos se encuentran desconectados
-        for nodo in self.nodos:
+        for nodo in self.nodos:  # Recorro nodos mirando cuantos estan desconectados
             if not nodo.connected:
                 self.valid_nodes += 1
-        if self.valid_nodes == 0 and len(self.nodos)>0:
-            self.build_matriz()
+        self.all_connected = False
+        if self.valid_nodes == 0 and len(self.nodos)>0:  # Se ejecuta si todos los nodos estan conectados
+            self.all_connected = True
+            self.build_matriz()  # Construir matriz de conexiones
 
     def build_matriz(self):
         """Funcion para construir matriz de incidencia"""
-        nro_nodos_sistema = len(self.nodos) - len(self.conections)
-        nro_items = len(self.own_items)
-        print('nodos: ', nro_nodos_sistema)
-        print('items: ', nro_items)
+        nro_nodos_sistema = len(self.nodos) - len(self.conections)  # Cantidad de nodos totales del sistema
+        nro_items = len(self.own_items)  # Nro de items presentes
         self.matriz_inc = np.zeros((nro_items,
-                                    nro_nodos_sistema + 1), dtype=object)  # La columna extra es para almacenar el valor de la confiabilidad para ese elemento
+                                    nro_nodos_sistema + 2), dtype=object)  # La columna extra es para almacenar el valor de la confiabilidad para ese elemento
         node = 0
         for value, item in enumerate(self.own_items):
             self.matriz_inc[value][nro_nodos_sistema] = \
             [element_ind.value for element_ind in self.items if element_ind.tag == item][0]
 
-        for key in self.keys:
-            if len(self.nodos_sistema[key]) > 0:
-                for nodo in self.nodos_sistema[key]:
+            for element_ind in self.items:
+                if element_ind.tag == item:
+                    if element_ind.tipo == 'caja':
+                        if element_ind.orientation:
+                            self.matriz_inc[value][-1] = 0
+                        else:
+                            self.matriz_inc[value][-1] = 1
+                    else:
+                        self.matriz_inc[value][-1] = 0
+
+
+        for key in self.keys:  # Recorrer etiquetas de nodos del sistema
+            if len(self.nodos_sistema[key]) > 0:  # Si ya existen nodos
+                for nodo in self.nodos_sistema[key]:  # Recorrer los nodos fisicos anexos al nodo del sistema
                     element = self.own_items.index(nodo.name_element)
                     self.matriz_inc[element][node] = 1
                 node += 1
-        print('---------')
-        print(self.matriz_inc)
         matriz_inc = self.matriz_inc.copy()
+        print(matriz_inc)
         del_row = []
         ana_rows = []
         num_iter = 0
@@ -301,65 +330,100 @@ class Container(pygame.sprite.Sprite):
         while num_iter < 30:
             num_iter += 1
             for index, row in enumerate(matriz_inc):  # Paralelos
-                row_n = row[:-1]  # Toma solo la parte que indica incidencia
+                row_n = row[:-2]  # Toma solo la parte que indica incidencia
                 if row_n.tolist() not in ana_rows:  # almacena las filas que no hayan sido evaluadas
                     ana_rows.append(row_n.tolist())
                     put = False
                     for index_2, row_2 in enumerate(matriz_inc):
-                        rown_2 = row_2[:-1]
+                        rown_2 = row_2[:-2]
                         if index != index_2:  # Verifica que no sea la misma posicion que se encuentra evaluando
                             if (row_n == rown_2).all():  # Compara si los arreglos son iguales
                                 del_row.append(index_2)  # Almacena la posicion del arreglo a eliminar
                                 put = True
-                                if matriz_inc[index, -1].startswith('('):
-                                    matriz_inc[index, -1] = matriz_inc[index, -1] +'*(1-' + matriz_inc[
-                                        index_2, -1] + ')'
+                                if matriz_inc[index, -2].startswith('('):
+                                    matriz_inc[index, -2] = matriz_inc[index, -2] +'*(1-' + matriz_inc[
+                                        index_2, -2] + ')'
                                 else:
-                                    matriz_inc[index, -1] = '(1-('+matriz_inc[index, -1]+'))*(1-('+ matriz_inc[index_2, -1]+'))'
-                    if matriz_inc[index, -1].startswith("(") and put:
-                        matriz_inc[index, -1] = '(1-('+matriz_inc[index, -1]+'))'
+                                    matriz_inc[index, -2] = '(1-('+matriz_inc[index, -2]+'))*(1-('+ matriz_inc[index_2, -2]+'))'
+                    if matriz_inc[index, -2].startswith("(") and put:
+                        print(matriz_inc[index, -2])
+                        matriz_inc[index, -2] = '(1-('+matriz_inc[index, -2]+'))'
 
             matriz_inc = np.delete(matriz_inc, del_row, 0)
             del_row = []
             ana_rows = []
             if matriz_inc.shape[0] == 3:
                 break
-            for index, column in enumerate(matriz_inc[:, :-1].T):  # Series
+            for index, column in enumerate(matriz_inc[:, :-2].T):  # Series
                 index_col = np.nonzero(column)[0]
                 if np.sum(column) == 2:
-                    row_1 = matriz_inc[index_col[0], :-1]
-                    row_2 = matriz_inc[index_col[1], :-1]
+                    row_1 = matriz_inc[index_col[0], :-2]
+                    row_2 = matriz_inc[index_col[1], :-2]
                     if np.sum(row_1) == 2 and np.sum(row_2) == 2:
                         new_row = abs(row_1 - row_2)
-                        matriz_inc[index_col[0], :-1] = new_row
+                        matriz_inc[index_col[0], :-2] = new_row
                         del_row.append(index_col[1])
-                        matriz_inc[index_col[0], -1] = matriz_inc[index_col[0], -1] + '*' + matriz_inc[index_col[1], -1]
+                        matriz_inc[index_col[0], -2] = matriz_inc[index_col[0], -2] + '*' + matriz_inc[index_col[1], -2]
                         break
             matriz_inc = np.delete(matriz_inc, del_row, 0)
             del_row = []
         else:
             irreduced = True
-        print('final: ')
-        print(matriz_inc)
         if irreduced:
             self.correct = False
-            print('El sistema es irreducible')
-            g = Graph(matriz_inc.shape[1])
+            num_nodos = matriz_inc.shape[1]-2
+            g = Graph(num_nodos)
+            source = list()
+            for row in matriz_inc:
+                if np.sum(row[:-2]) == 2:
+                    items = row[:-2].nonzero()[0].tolist()
+                    g.addEdge(items[0], items[1])
+                    g.addEdge(items[1], items[0])
+                else:
+                    items = row[:-2].nonzero()[0].tolist()
+                    source.append(items[0])
+            g.printAllPaths(source[0], source[1])
+            conf_total = ''
+            for path in g.path:
+                fin = len(path)-1
+                count = 0
+                conf_linea = ''
+                while count+1 <= fin:
+                    path_row = [path[count], path[count + 1]]
+                    path_row.sort()
+                    for row in matriz_inc:
+                        if np.sum(row[:-2]) == 2:
+                            if path_row == row[:-2].nonzero()[0].tolist():
+                                count += 1
+                                if not conf_linea:
+                                    conf_linea = row[-2]
+                                else:
+                                    conf_linea += '*'+ row[-2]
+                if not conf_total:
+                    conf_total = '(1-(' + conf_linea + '))'
+                else:
+                    conf_total += '*(1-(' + conf_linea + '))'
+            conf_total = '(1-' + conf_total + ')'
+            self.plot_all = conf_total
+            t = 600
+            print('La confiabilidad del sistema es: ', eval(conf_total) * 100)
+            #print('La inconfiabilidad del sistema es: ', (1 - eval(matriz_inc[2, -2])) * 100)
 
         else:
             self.correct = True
-            self.plot_all = matriz_inc[2, -1]
-            print('El sistema es reducible')
+            self.plot_all = matriz_inc[2, -2]
+            #print('El sistema es reducible')
             t = 600
-            print('La confiabilidad del sistema es: ', eval(matriz_inc[2, -1])*100)
-            print('La inconfiabilidad del sistema es: ', (1-eval(matriz_inc[2, -1]))*100)
+            print('La confiabilidad del sistema es: ', eval(matriz_inc[2, -2])*100)
+            #print('La inconfiabilidad del sistema es: ', (1-eval(matriz_inc[2, -2]))*100)
 
     def check_node(self, elem1, elem2):
-        if len(self.nodos_sistema[self.ini_tag]) == 0:
+        """Verificar a que nodo del sistema se conectan los nodos fisicos de los objetos"""
+        if len(self.nodos_sistema[self.ini_tag]) == 0:  # Agregarlos al primer nodo
             self.nodos_sistema[self.ini_tag].add(elem1)
             self.nodos_sistema[self.ini_tag].add(elem2)
         else:
-            for key in self.keys:
+            for key in self.keys:  # Recorre las etiquetas de los nodos disponibles
                 found = False
                 repeated = False
                 for elem in self.nodos_sistema[key]:
@@ -399,44 +463,15 @@ class Container(pygame.sprite.Sprite):
                         break
 
     def system_plot(self):
+        #tiempo = solve
         t = np.linspace(0, self.time, 500)
         plt.style.use('seaborn')  # pretty matplotlib plots
         plt.cla()
-        print('all', self.plot_all)
         plt.plot(t, eval(self.plot_all), c='blue',)
         plt.xlabel('t')
         plt.ylabel(r'$p(t|\beta,\alpha)$')
         #plt.title(self.types[elemento.mod])
         #plt.legend()
-
-class TextButton:
-    def __init__(self, text, name, position=(0, 0), size=(90, 30), text_position=(5, 5)):
-        self.text = text
-        self.name = name
-        self.position = position
-        self.size = size
-        self.text_position = text_position
-        self.own_surface = pygame.Surface(self.size)
-        self.own_surface.fill(SEMIWHITE)
-        self.recta = pygame.Rect(self.position[0], self.position[1], self.size[0], self.size[1])
-        self.font = pygame.font.SysFont('Arial', 13)
-        self.own_surface.blit(self.font.render(self.text, True,
-                              BLACK), self.text_position)
-        self.over = False
-
-    def draw_button(self, screen):
-        if self.over:
-            self.own_surface.fill(SLATEGRAY)
-            self.own_surface.blit(self.font.render(self.text, True,
-                                                   BLACK), self.text_position)
-            self.font.set_underline(True)
-        else:
-            self.own_surface.fill(SEMIWHITE)
-            self.own_surface.blit(self.font.render(self.text, True,
-                                                   BLACK), self.text_position)
-            self.font.set_underline(False)
-        screen.blit(self.own_surface, self.position)
-        pygame.draw.rect(screen, BLACK, self.recta, 1)
 
 
 # This class represents a directed graph
@@ -446,6 +481,7 @@ class Graph:
     def __init__(self, vertices):
         # No. of vertices
         self.V = vertices
+        self.path = []
 
         # default dictionary to store graph
         self.graph = defaultdict(list)
@@ -469,7 +505,9 @@ class Graph:
         # If current vertex is same as destination, then print
         # current path[]
         if u == d:
-            print(path)
+            #print(path)
+            #print('---------')
+            self.path.append(path.copy())
         else:
             # If current vertex is not destination
             # Recur for all the vertices adjacent to this vertex

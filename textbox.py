@@ -3,13 +3,23 @@ import os
 import pygame
 import numpy as np
 from scipy.stats import dweibull
+from decimal import Decimal
 import matplotlib.pyplot as plt
 
 
 WHITE = (255, 255, 255)
+WHITE2 = (247, 247, 247)
 BLUE = (65, 105, 225)
 BLACK = (0, 0, 0)
 GRAY = (128, 128, 128)
+GRAY_2 = (108, 118, 118)
+GRAY_3 = (70, 70, 70)
+RED = (255, 0, 0)
+BLACK = (0, 0, 0)
+SEMIWHITE = (245, 245, 245)
+LIGHTGRAY = (192, 192, 192)
+GANSBORO = (220, 220, 220)
+SLATEGRAY = (112, 128, 144)
 ACCEPTED = string.ascii_letters + '_-.' + string.digits
 
 
@@ -94,10 +104,11 @@ class TextBox(object):
 
 
 class ListBox:
-    def __init__(self):
-        self.container_clases = pygame.Surface((140, 210))  # listmenu de clases
+    def __init__(self, size=(140, 210), posi=(120, 240)):
+        self.size = size
+        self.container_clases = pygame.Surface(size)  # listmenu de clases
         self.container_clases.fill(WHITE)
-        self.posi_container = (120, 240)
+        self.posi_container = posi
         self.list_items = list()  # Contiene los elementos dentro del contenedor
         self.selected = 1  #
         self.conten_actual = 1
@@ -110,6 +121,11 @@ class ListBox:
         self.time = np.linspace(0, 8760, 1000)
         self.make_rects()
         self.types = {'exp': 'Distribución Exponencial', 'ray': 'Distribución Rayleigh', 'wei': 'Distribución Weibull'}
+        self.scroll = ScrollBar(self.posi_container, heigth=size[1], rects=self.num_rects)
+        self.panel_back = pygame.Surface((size[0]+40, size[1]+60))
+        self.panel_back.fill(GRAY_2)
+        self.panel_pos = (posi[0]-10, posi[1]-20)
+        self.accept = TextButton('Aceptar', 'ok', size=(60, 30), position=(posi[0]+size[0]/2-20, posi[1]+size[1]-10))
 
     def make_rects(self):
         for index in range(self.num_rects):
@@ -119,7 +135,7 @@ class ListBox:
         self.list_items.append(element)
 
     def del_data(self, element):
-        pass
+        self.list_items.remove(element)
 
     def consult_position(self, position):
         for index in range(self.num_rects):
@@ -135,9 +151,26 @@ class ListBox:
             screen.blit(self.font.render(element.tag, True,
                                                   BLACK),
                                  (self.posi_container[0] + 5, self.posi_container[1] + 5 + (index * self.dt)))
-        print(self.conten_actual)
         caja = self.list_items[self.conten_actual-1]
         self.make_plot(caja)
+        self.scroll.draw_bar(screen, len(self.list_items), pos_der=self.size[0], pos_abajo=self.size[1])
+
+    def draw_mod(self, screen):
+        """Dibujo de listbox para modulos"""
+        screen.blit(self.panel_back, self.panel_pos)
+        screen.blit(self.container_clases, self.posi_container)
+        self.accept.draw_button(screen)
+        self.selected_class = pygame.Rect(self.posi_container[0] + 2,
+                                          (self.posi_container[1] + (30 * (self.conten_actual - 1))) + 1, 136, 28)
+        pygame.draw.rect(screen, BLUE, self.selected_class, 0)
+        for index, element in enumerate(self.list_items):
+            screen.blit(self.font.render(element.name, True,
+                                                  BLACK),
+                                 (self.posi_container[0] + 5, self.posi_container[1] + 5 + (index * self.dt)))
+        #print(self.conten_actual-1)
+        #caja = self.list_items[self.conten_actual-1]
+        #self.make_plot(caja)
+        self.scroll.draw_bar(screen, len(self.list_items), pos_der=self.size[0], pos_abajo=self.size[1])
 
     def make_plot(self, elemento):
         #dist = dweibull(float(elemento.betha), 0, float(elemento.alpha))
@@ -146,12 +179,57 @@ class ListBox:
         #plt.plot(self.time, dist.pdf(self.time), c='blue',
                  #label=r'$\beta=%.3f,\ \alpha=%.3f$' % (float(elemento.betha), float(elemento.alpha)))
         t = self.time
-        plt.plot(self.time, eval(elemento.value), c='blue',
-                 label=r'$\beta=%.3f,\ \alpha=%.3f$' % (float(elemento.betha), float(elemento.alpha)))
-        plt.xlabel('t')
-        plt.ylabel(r'$p(t|\beta,\alpha)$')
-        plt.title(self.types[elemento.mod])
-        plt.legend()
+        if elemento.tipo != 'paralelo' or elemento.tipo != 'modulo':
+            plt.plot(self.time, eval(elemento.value), c='blue',
+                     label=r'$\beta=%.3f,\ \lambda=%.3E$' % (float(elemento.betha), Decimal(elemento.alpha)))
+            plt.xlabel('t')
+            plt.ylabel(r'$p(t|\beta,\lambda)$')
+            plt.title(self.types[elemento.mod])
+            plt.legend()
+        else:
+            plt.plot(self.time, eval(elemento.value), c='blue')
+            plt.xlabel('t')
+            plt.ylabel(r'$p(t|\beta,\lambda)$')
+
+
+class ScrollBar:
+    """Clase que permite dibujar scrollbar"""
+    def __init__(self, pos, width=25, heigth=40, rects=1):
+        self.pos = pos
+        self.width = width  # Ancho de la barra
+        self.heigth = heigth-width*2
+        self.rects = rects
+        self.up = pygame.image.load(os.path.join("icons", "up.png"))
+        self.down = pygame.image.load(os.path.join("icons", "down.png"))
+        self.up_surface = pygame.Surface((width, width))
+        self.up_surface.fill(WHITE2)
+        self.down_surface = pygame.Surface((width, width))
+        self.down_surface.fill(WHITE2)
+        self.fondo_barra = pygame.Surface((width, heigth))
+        self.fondo_barra.fill(GRAY_2)
+        self.fondo_rect = self.fondo_barra.get_rect()
+        self.dt = 10  # Indica el desplazamiento de la barra
+        self.actual_pos = 0  # Posición actual
+
+    def draw_bar(self, screen, num_rows, pos_abajo=0, pos_arriba=0, pos_der=0, pos_izq=0):
+        if num_rows>self.rects:  # Indica si existen mas de los elementos posibles a visualizar en el contenedor
+            self.barra = pygame.Surface(((self.width - 4), self.heigth-(num_rows-self.rects)*self.dt))
+        else:
+            self.barra = pygame.Surface(((self.width - 4), self.heigth))
+        self.barra_rect = self.barra.get_rect()
+        self.barra.fill(RED)
+        self.down_surface.blit(self.down, (3, 3))
+        self.up_surface.blit(self.up, (3, 3))
+        self.barra_rect.center = (self.pos[0] + (self.width / 2) + pos_der, 0)
+        self.barra_rect.y = self.pos[1]+self.width
+        self.fondo_rect.center = (self.pos[0] + (self.width / 2) + pos_der, self.pos[1] + (self.heigth / 2))
+        screen.blit(self.fondo_barra, self.fondo_rect)
+        screen.blit(self.barra, self.barra_rect)
+        screen.blit(self.down_surface, (self.pos[0] + pos_der, self.pos[1]+(pos_abajo-self.width)))
+        screen.blit(self.up_surface, (self.pos[0] + pos_der, self.pos[1]))
+
+    def action_bar(self):
+        pass
 
 
 class RadioButton:
@@ -185,3 +263,33 @@ class RadioButton:
             self.own_surface.fill(self.color)
             self.own_surface.blit(self.no_pushed, (0, 0))
         screen.blit(self.own_surface, self.position)
+
+
+class TextButton:
+    def __init__(self, text, name, position=(0, 0), size=(90, 30), text_position=(5, 5)):
+        self.text = text
+        self.name = name
+        self.position = position
+        self.size = size
+        self.text_position = text_position
+        self.own_surface = pygame.Surface(self.size)
+        self.own_surface.fill(SEMIWHITE)
+        self.recta = pygame.Rect(self.position[0], self.position[1], self.size[0], self.size[1])
+        self.font = pygame.font.SysFont('Arial', 13)
+        self.own_surface.blit(self.font.render(self.text, True,
+                              BLACK), self.text_position)
+        self.over = False
+
+    def draw_button(self, screen):
+        if self.over:
+            self.own_surface.fill(SLATEGRAY)
+            self.own_surface.blit(self.font.render(self.text, True,
+                                                   BLACK), self.text_position)
+            self.font.set_underline(True)
+        else:
+            self.own_surface.fill(SEMIWHITE)
+            self.own_surface.blit(self.font.render(self.text, True,
+                                                   BLACK), self.text_position)
+            self.font.set_underline(False)
+        screen.blit(self.own_surface, self.position)
+        pygame.draw.rect(screen, BLACK, self.recta, 1)

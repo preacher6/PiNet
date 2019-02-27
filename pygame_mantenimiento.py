@@ -50,8 +50,7 @@ class PGManten:
                             self.property_class.name_element.active = True  # Activar casilla de nombre propiedades
                             self.property_class.element_property(position_mouse, 1)  # Activar propiedad elemento
                             self.property_class.name_element.buffer = [self.property_class.elem_selected]  # Buffer
-                            #if self.property_class.type_element == 1:  # Valor de los campos de texto
-                            for container in self.property_class.elementos['containers']:
+                            for container in self.property_class.elementos['containers']:  #Acciones de ingreso de texto
                                 if container.selected:
                                     for caja in container.cajas:
                                         if caja.tag == self.property_class.elem_selected:
@@ -72,9 +71,9 @@ class PGManten:
                                         if kdn.tag == self.property_class.elem_selected:
                                             self.property_class.box_field1.buffer = [str(kdn.alpha)]
                                             self.property_class.box_field2.buffer = [str(kdn.betha)]
-
                         if self.property_class.container.recta_new.collidepoint(position_mouse) \
                                 and self.property_class.cont < 7:  # Agregar pestañas si son menos de 7
+                            print('jmmm')
                             self.property_class.add_container()
                         self.property_class.delete_container(position_mouse)  # Verificar si alguna pestaña se cierra
                         self.property_class.select_container(position_mouse)  # Seleccionar pestaña
@@ -98,16 +97,26 @@ class PGManten:
                                                                                             self.property_class.elem2)
                                                 container.conections.add(conexion)
                                                 self.property_class.duple_conection = []
+                                                # Verificar a que nodo del sistema van los nodos fisicos del objeto
                                                 container.check_node(self.property_class.elem1, self.property_class.elem2)
-                                                #print(container.nodos_sistema)
 
                             else:
                                 self.property_class.duple_conection.pop()
-                        if self.property_class.line_able:
+                        if self.property_class.actions[3]:
+                            self.property_class.delete_element(position_mouse)
+                        if self.property_class.actions[5]:
+                            if self.property_class.list_box_modules.accept.recta.collidepoint(position_mouse):
+                                self.property_class.draw_module = True
+                                self.property_class.elem_modulo = self.property_class.list_box_modules.list_items[self.property_class.list_box_modules.conten_actual-1]
+                        """if self.property_class.rect_up.collidepoint(position_mouse):
+                            self.property_class.scroll()"""
+                        if self.property_class.line_able:  # Permitir dibujar linea
                             self.property_class.hold_line = True
                         if self.property_class.drawing:  # Poner elemento
                             self.property_class.put_element()
-                        if self.property_class.check.recta.collidepoint(position_mouse):
+                        if self.property_class.moving:  # Reponer elemento que se esta moviendo
+                            self.property_class.repos_element()
+                        if self.property_class.check.recta.collidepoint(position_mouse):  # Para rotar cajitas
                             for container in self.property_class.elementos['containers']:
                                 if container.selected:
                                     for caja in container.cajas:
@@ -134,11 +143,14 @@ class PGManten:
             self.property_class.draw_containers(self.screen_form)
             self.property_class.draw_on_screen(self.screen_form, abs_position, position_mouse)
             self.property_class.exec_actions(self.screen_form, abs_position, position_mouse)
-            if self.property_class.actions[6] or self.property_class.elem_proper:
+            if self.property_class.actions[6] or self.property_class.elem_proper:  # Escribir nombre de pestañas
                 self.property_class.draw_text(self.screen_form)
                 self.property_class.draw = True
             if self.property_class.hold_line:  # Dibujando linea en caliente
                 self.property_class.draw_line(self.screen_form)
+            if self.property_class.element_moved != None:  # Mover elementos
+                self.property_class.move_element(self.screen_form, abs_position)
+                self.property_class.moving = True
             self.clock.tick(60)
             dt = self.clock.tick(30) / 1000  # Delta del timer
             pygame.display.flip()

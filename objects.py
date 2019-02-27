@@ -1,6 +1,7 @@
 import pygame
 import os
 import numpy as np
+import sympy as sy
 from sympy import *
 from math import factorial
 
@@ -11,6 +12,7 @@ WHITE = (255, 255, 255)
 class Init(pygame.sprite.Sprite):
     def __init__(self, position):
         pygame.sprite.Sprite.__init__(self)
+        self.tipo = 'ini'
         self.image = pygame.image.load(os.path.join('pics', 'init.png'))
         self.rect = self.image.get_rect()
         self.rect.center = [position[0], position[1]]
@@ -33,6 +35,7 @@ class Init(pygame.sprite.Sprite):
 class End(pygame.sprite.Sprite):
     def __init__(self, position):
         pygame.sprite.Sprite.__init__(self)
+        self.tipo = 'fin'
         self.image = pygame.image.load(os.path.join('pics', 'end.png'))
         self.rect = self.image.get_rect()
         self.rect.center = [position[0], position[1]]
@@ -52,9 +55,36 @@ class End(pygame.sprite.Sprite):
             nodo.draw(screen)
 
 
+
+class Module(pygame.sprite.Sprite):
+    def __init__(self, pos, cont, value, container, name=""):
+        pygame.sprite.Sprite.__init__(self)
+        self.tag = name
+        self.value = value
+        self.tipo = 'modulo'
+        self.container = container
+        self.image = pygame.image.load(os.path.join('pics', 'modulo.png'))
+        self.rect = self.image.get_rect()
+        self.rect.x = pos[0]
+        self.rect.y = pos[1]
+        self.font = pygame.font.SysFont('Arial', 14)
+        self.pos = pos
+        self.nodos = pygame.sprite.Group()
+        self.nodos.add(Nodo((self.pos[0] - 20, self.pos[1] + 40), 1, self.tag))
+        self.nodos.add(Nodo((self.pos[0] + 120, self.pos[1] + 40), 2, self.tag))
+
+    def draw(self, screen):
+        for nodo in self.nodos:
+            pygame.draw.aaline(screen, BLACK, (self.pos[0] + 40, nodo.pos[1]), nodo.pos)
+            nodo.draw(screen)
+        screen.blit(self.image, self.rect)
+        screen.blit(self.font.render(self.tag, True, (255, 0, 0)), (self.pos[0], self.pos[1] + 80))
+
+
 class Caja(pygame.sprite.Sprite):
     def __init__(self, pos, cont, name="", orien=True):
         pygame.sprite.Sprite.__init__(self)
+        self.tipo = 'caja'
         self.image = pygame.image.load(os.path.join('pics', 'caja.png'))
         self.rect = self.image.get_rect()
         self.rect.x = pos[0]
@@ -72,13 +102,14 @@ class Caja(pygame.sprite.Sprite):
         self.enable = 'H'
         self.alpha = '1e-4'
         self.betha = '1'
-        self.value = 'np.exp(-(t*'+self.alpha+')**'+self.betha+')'
+        self.value = 'sy.exp(-(t*'+self.alpha+')**'+self.betha+')'
         self.nodos = pygame.sprite.Group()
         self.nodos.add(Nodo((self.pos[0] - 20, self.pos[1] + 40), 1, self.tag))
         self.nodos.add(Nodo((self.pos[0] + 100, self.pos[1] + 40), 2, self.tag))
+        self.moving = False  # Indica si el objeto esta siendo desplazado
 
     def update_obj(self):
-        self.value = 'np.exp(-(t*' + self.alpha + ')**' + self.betha + ')'
+        self.value = 'sy.exp(-(t*' + self.alpha + ')**' + self.betha + ')'
 
     def calc_nodes(self):
         self.nodos = pygame.sprite.Group()
@@ -131,6 +162,7 @@ class Knn(pygame.sprite.Sprite):
     """Clase para elementos en paralelo"""
     def __init__(self, pos, cont, num_rows=2):
         pygame.sprite.Sprite.__init__(self)
+        self.tipo = 'paralelo'
         self.font = pygame.font.SysFont('Arial', 14)
         self.image = pygame.image.load(os.path.join('pics', 'knn_back.png'))
         self.rect = self.image.get_rect()
@@ -187,6 +219,9 @@ class Knn(pygame.sprite.Sprite):
         self.rect.x = self.pos[0] + (24 * self.num_cols)
 
     def calc_nodes(self):
+        """Calcular posicion de los nodos"""
+        self.calc_num_cols()
+        self.calc_lines()
         height_nodes = self.pos[1]+self.node_dt*self.num_rows+20
         self.nodos = pygame.sprite.Group()
         self.nodos.add(Nodo((self.up[0][0], height_nodes), 1, self.tag))
@@ -265,6 +300,7 @@ class Knn(pygame.sprite.Sprite):
 class Stand(pygame.sprite.Sprite):
     def __init__(self, pos, cont, num_rows=2):
         pygame.sprite.Sprite.__init__(self)
+        self.tipo = 'stand'
         self.font = pygame.font.SysFont('Arial', 14)
         self.image = pygame.image.load(os.path.join('pics', 'stand.png'))
         self.rect = self.image.get_rect()
@@ -276,6 +312,7 @@ class Stand(pygame.sprite.Sprite):
         self.num_rows = num_rows
         self.cajas = pygame.sprite.Group()
         self.node_dt = 100
+        self.mod = 'exp'
         self.alpha = '4.3e-4'
         self.betha = '1'
         self.own_value = 'np.exp(-(t*' + self.alpha + ')**' + self.betha + ')*'
@@ -335,6 +372,7 @@ class Stand(pygame.sprite.Sprite):
 class Kdn(pygame.sprite.Sprite):
     def __init__(self, pos, cont, num_rows=2, num_active=1):
         pygame.sprite.Sprite.__init__(self)
+        self.tipo = 'kdn'
         self.font = pygame.font.SysFont('Arial', 14)
         self.image = pygame.image.load(os.path.join('pics', 'knn_back.png'))
         self.rect = self.image.get_rect()
@@ -418,6 +456,7 @@ class Kdn(pygame.sprite.Sprite):
 
 
 class Nodo(pygame.sprite.Sprite):
+    """Nodos correspondientes a los elementos a interconectar"""
     def __init__(self, pos, cont, name_element):
         pygame.sprite.Sprite.__init__(self)
         self.name_element = name_element  # Este debe renombrarse a la par con el elemento que se encuentra conectado
@@ -443,6 +482,7 @@ class Conexion(pygame.sprite.Sprite):
     def __init__(self, puntos, elem1, elem2):
         pygame.sprite.Sprite.__init__(self)
         self.puntos = puntos
+        print(self.puntos)
         self.elem1 = elem1
         self.elem2 = elem2  # Este elemento es una etiqueta si pertenece a las conexiones de propiedades, y es un numero si pertence a un elemento
 
