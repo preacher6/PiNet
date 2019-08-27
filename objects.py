@@ -1,7 +1,6 @@
 import pygame
 import os
 import numpy as np
-import sympy as sy
 from sympy import *
 from math import factorial
 
@@ -57,9 +56,11 @@ class End(pygame.sprite.Sprite):
 
 
 class Module(pygame.sprite.Sprite):
+    """Clase que permite crear el objeto modulo"""
     def __init__(self, pos, cont, value, container, name=""):
         pygame.sprite.Sprite.__init__(self)
         self.tag = name
+        self.simbolo = symbols(self.tag)
         self.value = value
         self.tipo = 'modulo'
         self.container = container
@@ -87,7 +88,7 @@ class Caja(pygame.sprite.Sprite):
         self.tipo = 'caja'
         self.image = pygame.image.load(os.path.join('pics', 'caja.png'))
         self.rect = self.image.get_rect()
-        self.rect.x = pos[0]
+        self.rect.x = pos[0]    
         self.rect.y = pos[1]
         self.tag = name+'Caja_'+str(cont)
         self.id = cont
@@ -109,7 +110,7 @@ class Caja(pygame.sprite.Sprite):
         self.moving = False  # Indica si el objeto esta siendo desplazado
 
     def update_obj(self):
-        self.value = 'sy.exp(-(t*' + self.alpha + ')**' + self.betha + ')'
+        self.value = 'np.exp(-(t*' + self.alpha + ')**' + self.betha + ')'
 
     def calc_nodes(self):
         self.nodos = pygame.sprite.Group()
@@ -309,11 +310,11 @@ class Stand(pygame.sprite.Sprite):
         self.cont = cont
         self.tag = 'StandBy_' + str(cont)
         self.pos = pos
-        self.num_rows = num_rows
+        self.num_rows = num_rows3
         self.cajas = pygame.sprite.Group()
         self.node_dt = 100
         self.mod = 'exp'
-        self.alpha = '4.3e-4'
+        self.alpha = '1.21e-4'
         self.betha = '1'
         self.own_value = 'np.exp(-(t*' + self.alpha + ')**' + self.betha + ')*'
         self.line = ''

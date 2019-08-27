@@ -45,6 +45,9 @@ class PGManten:
                     if pygame.mouse.get_pressed()[0]:  # Boton izquierdo
                         if timer == 0:
                             timer = 0.001
+                            for container in self.property_class.elementos['containers']:  #Acciones de ingreso de texto
+                                if container.selected:
+                                    self.property_class.time_field.buffer = [str(container.time)]
                         elif timer < 0.3 and not self.property_class.elem_type:  # Doble click apertura modulo
                             timer = 0
                             self.property_class.name_element.active = True  # Activar casilla de nombre propiedades
@@ -143,7 +146,7 @@ class PGManten:
             self.property_class.draw_containers(self.screen_form)
             self.property_class.draw_on_screen(self.screen_form, abs_position, position_mouse)
             self.property_class.exec_actions(self.screen_form, abs_position, position_mouse)
-            if self.property_class.actions[6] or self.property_class.elem_proper:  # Escribir nombre de pestañas
+            if self.property_class.actions[6] or self.property_class.elem_proper or self.property_class.config_bit:  # Escribir nombre de pestañas
                 self.property_class.draw_text(self.screen_form)
                 self.property_class.draw = True
             if self.property_class.hold_line:  # Dibujando linea en caliente

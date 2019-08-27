@@ -67,6 +67,7 @@ class Property(pygame.sprite.Sprite):
         self.data_general = {}
         self.data_file = 'datos/data.txt'
         self.list_box_modules = ListBox(posi=(360, 230))
+        self.config_bit = False
 
     def init_properties(self):
         self.container = Container((self.pos_workspace[0],
@@ -265,8 +266,6 @@ class Property(pygame.sprite.Sprite):
                         self.list_box_modules.add_data(container)
                         self.cancel()
                         break
-                        #with open(self.data_file, 'wb') as fp:
-                        #    pickle.dump(self.data_general, fp)
         elif self.actions[5]:  # Importar modulo
             self.list_box_modules.consult_position(abs_position)
             self.list_box_modules.draw_mod(screen)
@@ -589,6 +588,8 @@ class Property(pygame.sprite.Sprite):
                                   clear_on_enter=False, inactive_on_enter=True)
         self.box_field2 = TextBox((485, 280, 100, 20), id="name_con", active=False,
                                   clear_on_enter=False, inactive_on_enter=True)
+        self.time_field = TextBox((150, 260, 100, 20), id="name_con", active=True,
+                                  clear_on_enter=False, inactive_on_enter=True)
 
     def check_text(self, event):
         if self.text_status[0] == 1:
@@ -605,6 +606,8 @@ class Property(pygame.sprite.Sprite):
             self.box_field2.get_event(event)
         elif self.text_status[4] == 1:
             self.name_element.get_event(event)
+        if self.config_bit:
+            self.time_field.get_event(event)
 
     def draw_text(self, screen):
         if self.text_status[0] == 1:
@@ -792,6 +795,7 @@ class Property(pygame.sprite.Sprite):
         self.draw_elements(screen)
         for elemento in self.elementos['opciones']:
             if elemento.name == 'module':
+                self.config_bit = False
                 if elemento.active:
                     self.draw_grid(screen, self.pos_workspace)
                     self.draw_cont_elements(screen)
@@ -860,14 +864,26 @@ class Property(pygame.sprite.Sprite):
                 if elemento.active:
                     for container in self.elementos['containers']:
                         if container.selected:
-                            if container.correct:
-                                screen.blit(self.plot_surface, self.pos_plot)
-                                container.system_plot()
-                                screen.blit(self.canvas_space(self.fig), (310, 240))
-                                t = 600
-                                screen.blit(self.font.render('La confiabilidad del sistema es: '+str(round(eval(container.plot_all)*100,3))+'%' , True, (0, 0, 0)), (80, 300))
-                                screen.blit(self.font.render('La inconfiabilidad del sistema es: ' + str(
-                                    round((1-eval(container.plot_all)) * 100, 3)) + '%', True, (0, 0, 0)), (80, 330))
+                            screen.blit(self.plot_surface, self.pos_plot)
+                            container.system_plot()
+                            screen.blit(self.canvas_space(self.fig), (310, 240))
+                            t = container.time_eval
+                            screen.blit(self.font.render('La confiabilidad del sistema es: '+str(round(eval(container.plot_all)*100,3))+'%' , True, (0, 0, 0)), (80, 300))
+                            screen.blit(self.font.render('La inconfiabilidad del sistema es: ' + str(
+                                round((1-eval(container.plot_all)) * 100, 3)) + '%', True, (0, 0, 0)), (80, 330))
+
+            elif elemento.name == 'config':
+                if elemento.active:
+                    for container in self.elementos['containers']:
+                        if container.selected:
+                            self.config_bit = True
+                            self.config_panel(container, screen)
+
+    def config_panel(self, container, screen):
+        screen.blit(self.font.render('Parámetros del contenedor "'+container.name+'"', True, (0, 0, 0)), (95, 210))
+        screen.blit(self.font.render('Tiempo:', True, (0, 0, 0)), (95, 259))
+        self.time_field.update()
+        self.time_field.draw(screen)
 
     def cancel(self):
         """Cancelar acciones en ejecución"""

@@ -135,10 +135,11 @@ class Container(pygame.sprite.Sprite):
         self.ini_tag = self.keys[0]
         self.nodos_sistema = {key:pygame.sprite.Group() for key in self.keys}  # Define los nodos del sistema
         self.correct = False  # Indica si es posible obtener confiabilidad del sistema
-        self.time = 600
+        self.time = 30000  # Tiempo total del sistema
         self.plot_all = 0
         self.all_connected = False
         self.init_containter()
+        self.time_eval = 600  # Tiempo que se desea evaluar
 
     def load_pics(self):
         """Cargar imagenes"""
@@ -405,16 +406,17 @@ class Container(pygame.sprite.Sprite):
                     conf_total += '*(1-(' + conf_linea + '))'
             conf_total = '(1-' + conf_total + ')'
             self.plot_all = conf_total
-            t = 600
-            print('La confiabilidad del sistema es: ', eval(conf_total) * 100)
+            t = self.time_eval
+            print('La confiabilidad del sistema es: ', eval(conf_total)*100)
+            print(conf_total)
             #print('La inconfiabilidad del sistema es: ', (1 - eval(matriz_inc[2, -2])) * 100)
-
         else:
             self.correct = True
             self.plot_all = matriz_inc[2, -2]
             #print('El sistema es reducible')
-            t = 600
+            t = self.time_eval
             print('La confiabilidad del sistema es: ', eval(matriz_inc[2, -2])*100)
+            print(matriz_inc[2, -2])
             #print('La inconfiabilidad del sistema es: ', (1-eval(matriz_inc[2, -2]))*100)
 
     def check_node(self, elem1, elem2):
