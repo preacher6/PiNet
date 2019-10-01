@@ -88,7 +88,11 @@ class Property(pygame.sprite.Sprite):
         wei = TextButton('Weibull', 'wei', position=(self.pos_proper[0] + 116, self.pos_proper[1] + 100), size=(72, 30),
                          text_position=(18, 5))
         self.text_buttons = [exp, ray, wei]
-        self.check = RadioButton('Check', 'Rotar', position=(self.pos_proper[0]+15, self.pos_proper[1]+130))
+        self.check = CheckButton('Check', 'Rotar', position=(self.pos_proper[0]+15, self.pos_proper[1]+130))
+        radio1_out = RadioButton('Radio1', 'Confiabilidad', position=(self.pos_plot[0] + 15, self.pos_plot[1] + 30),
+                                 active=True)
+        radio2_out = RadioButton('Radio2', 'Medida Importancia', position=(self.pos_plot[0] + 15, self.pos_plot[1] + 60))
+        self.radio_out = [radio1_out, radio2_out]
 
     # --------------------------------- Relacionado a contenedores------------------------------------------
 
@@ -764,7 +768,7 @@ class Property(pygame.sprite.Sprite):
                 if container.selected:
                     container.all_module += 1
                     module = Module(self.put_position, container.all_module, self.elem_modulo.plot_all, self.elem_modulo,
-                                    name=self.elem_modulo.name)
+                                    self.elem_modulo.func_sym, name=self.elem_modulo.name)
                     for nodo in module.nodos:
                         container.nodos.add(nodo)
                     container.list_box.add_data(module)
@@ -871,6 +875,17 @@ class Property(pygame.sprite.Sprite):
                             screen.blit(self.font.render('La confiabilidad del sistema es: '+str(round(eval(container.plot_all)*100,3))+'%' , True, (0, 0, 0)), (80, 300))
                             screen.blit(self.font.render('La inconfiabilidad del sistema es: ' + str(
                                 round((1-eval(container.plot_all)) * 100, 3)) + '%', True, (0, 0, 0)), (80, 330))
+                            for radio in self.radio_out:
+                                radio.draw(screen)
+                                if radio.recta.collidepoint(push_position):
+                                    radio.push = True
+                                    if radio.name == 'Radio1':
+                                        container.type_plot = 1
+                                    else:
+                                        container.type_plot = 0
+                                    for otro_radio in self.radio_out:
+                                        if otro_radio.name != radio.name:
+                                            otro_radio.push = False
 
             elif elemento.name == 'config':
                 if elemento.active:

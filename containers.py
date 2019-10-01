@@ -1,6 +1,7 @@
 import pygame
 import os
 import numpy as np
+import sympy as sy
 import matplotlib.pyplot as plt
 from objects import *
 from textbox import ListBox
@@ -184,6 +185,7 @@ class Container(pygame.sprite.Sprite):
         self.caja = pygame.image.load(os.path.join('pics', 'caja.png'))
         self.stand = pygame.image.load(os.path.join('pics', 'stand_by.png'))
         self.knn = pygame.image.load(os.path.join('pics', 'knn.png'))
+        self.type_plot = 1
 
     def init_containter(self):
         """Inicializar elementos que tiene el contenedor"""
@@ -299,11 +301,15 @@ class Container(pygame.sprite.Sprite):
         nro_nodos_sistema = len(self.nodos) - len(self.conections)  # Cantidad de nodos totales del sistema
         nro_items = len(self.own_items)  # Nro de items presentes
         self.matriz_inc = np.zeros((nro_items,
-                                    nro_nodos_sistema + 2), dtype=object)  # La columna extra es para almacenar el valor de la confiabilidad para ese elemento
+                                    nro_nodos_sistema + 4), dtype=object)  # La columna extra es para almacenar el valor de la confiabilidad para ese elemento
         node = 0
         for value, item in enumerate(self.own_items):
             self.matriz_inc[value][nro_nodos_sistema] = \
             [element_ind.value for element_ind in self.items if element_ind.tag == item][0]
+            self.matriz_inc[value][nro_nodos_sistema + 1] = \
+            [element_ind.sym for element_ind in self.items if element_ind.tag == item][0]
+            self.matriz_inc[value][nro_nodos_sistema+2] = \
+            [element_ind.value_sy for element_ind in self.items if element_ind.tag == item][0]
 
             for element_ind in self.items:
                 if element_ind.tag == item:
@@ -314,7 +320,6 @@ class Container(pygame.sprite.Sprite):
                             self.matriz_inc[value][-1] = 1
                     else:
                         self.matriz_inc[value][-1] = 0
-
 
         for key in self.keys:  # Recorrer etiquetas de nodos del sistema
             if len(self.nodos_sistema[key]) > 0:  # Si ya existen nodos
@@ -328,43 +333,51 @@ class Container(pygame.sprite.Sprite):
         ana_rows = []
         num_iter = 0
         irreduced = False
-        while num_iter < 30:
+        equation = ''
+        variables_sym = matriz_inc[2:, -3].tolist()
+        values_sym = matriz_inc[2:, -2].tolist()
+        # Diccionario de lo simbolico
+        dicto_variables = {k:v for k, v in zip(variables_sym, values_sym)}
+        print(variables_sym)
+        while num_iter < 100:  # Evalua X cantidad de veces los posibles caminos
             num_iter += 1
             for index, row in enumerate(matriz_inc):  # Paralelos
-                row_n = row[:-2]  # Toma solo la parte que indica incidencia
+                row_n = row[:-4]  # Toma solo la parte que indica incidencia
                 if row_n.tolist() not in ana_rows:  # almacena las filas que no hayan sido evaluadas
                     ana_rows.append(row_n.tolist())
                     put = False
                     for index_2, row_2 in enumerate(matriz_inc):
-                        rown_2 = row_2[:-2]
+                        rown_2 = row_2[:-4]
                         if index != index_2:  # Verifica que no sea la misma posicion que se encuentra evaluando
                             if (row_n == rown_2).all():  # Compara si los arreglos son iguales
                                 del_row.append(index_2)  # Almacena la posicion del arreglo a eliminar
                                 put = True
-                                if matriz_inc[index, -2].startswith('('):
-                                    matriz_inc[index, -2] = matriz_inc[index, -2] +'*(1-' + matriz_inc[
-                                        index_2, -2] + ')'
+                                if matriz_inc[index, -4].startswith('('):
+                                    matriz_inc[index, -3] = matriz_inc[index, -3]*(1-matriz_inc[index_2, -3])
+                                    matriz_inc[index, -4] = matriz_inc[index, -4] + '*(1-' + matriz_inc[
+                                        index_2, -4] + ')'
                                 else:
-                                    matriz_inc[index, -2] = '(1-('+matriz_inc[index, -2]+'))*(1-('+ matriz_inc[index_2, -2]+'))'
-                    if matriz_inc[index, -2].startswith("(") and put:
-                        print(matriz_inc[index, -2])
-                        matriz_inc[index, -2] = '(1-('+matriz_inc[index, -2]+'))'
-
+                                    matriz_inc[index, -3] = (1-(matriz_inc[index, -3]))*(1-(matriz_inc[index_2, -3]))
+                                    matriz_inc[index, -4] = '(1-('+matriz_inc[index, -4]+'))*(1-('+ matriz_inc[index_2, -4]+'))'
+                    if matriz_inc[index, -4].startswith("(") and put:
+                        matriz_inc[index, -3] = (1-(matriz_inc[index, -3]))
+                        matriz_inc[index, -4] = '(1-(' + matriz_inc[index, -4] + '))'
             matriz_inc = np.delete(matriz_inc, del_row, 0)
             del_row = []
             ana_rows = []
-            if matriz_inc.shape[0] == 3:
+            if matriz_inc.shape[0] == 3:  # Si solo quedan 3 filas cumple
                 break
-            for index, column in enumerate(matriz_inc[:, :-2].T):  # Series
+            for index, column in enumerate(matriz_inc[:, :-4].T):  # Series
                 index_col = np.nonzero(column)[0]
                 if np.sum(column) == 2:
-                    row_1 = matriz_inc[index_col[0], :-2]
-                    row_2 = matriz_inc[index_col[1], :-2]
+                    row_1 = matriz_inc[index_col[0], :-4]
+                    row_2 = matriz_inc[index_col[1], :-4]
                     if np.sum(row_1) == 2 and np.sum(row_2) == 2:
                         new_row = abs(row_1 - row_2)
-                        matriz_inc[index_col[0], :-2] = new_row
+                        matriz_inc[index_col[0], :-4] = new_row
                         del_row.append(index_col[1])
-                        matriz_inc[index_col[0], -2] = matriz_inc[index_col[0], -2] + '*' + matriz_inc[index_col[1], -2]
+                        matriz_inc[index_col[0], -3] = matriz_inc[index_col[0], -3] *matriz_inc[index_col[1], -3]
+                        matriz_inc[index_col[0], -4] = matriz_inc[index_col[0], -4] + '*' + matriz_inc[index_col[1], -4]
                         break
             matriz_inc = np.delete(matriz_inc, del_row, 0)
             del_row = []
@@ -376,12 +389,12 @@ class Container(pygame.sprite.Sprite):
             g = Graph(num_nodos)
             source = list()
             for row in matriz_inc:
-                if np.sum(row[:-2]) == 2:
-                    items = row[:-2].nonzero()[0].tolist()
+                if np.sum(row[:-3]) == 2:
+                    items = row[:-3].nonzero()[0].tolist()
                     g.addEdge(items[0], items[1])
                     g.addEdge(items[1], items[0])
                 else:
-                    items = row[:-2].nonzero()[0].tolist()
+                    items = row[:-3].nonzero()[0].tolist()
                     source.append(items[0])
             g.printAllPaths(source[0], source[1])
             conf_total = ''
@@ -393,13 +406,13 @@ class Container(pygame.sprite.Sprite):
                     path_row = [path[count], path[count + 1]]
                     path_row.sort()
                     for row in matriz_inc:
-                        if np.sum(row[:-2]) == 2:
-                            if path_row == row[:-2].nonzero()[0].tolist():
+                        if np.sum(row[:-3]) == 2:
+                            if path_row == row[:-3].nonzero()[0].tolist():
                                 count += 1
                                 if not conf_linea:
-                                    conf_linea = row[-2]
+                                    conf_linea = row[-3]
                                 else:
-                                    conf_linea += '*'+ row[-2]
+                                    conf_linea += '*'+ row[-3]
                 if not conf_total:
                     conf_total = '(1-(' + conf_linea + '))'
                 else:
@@ -409,14 +422,28 @@ class Container(pygame.sprite.Sprite):
             t = self.time_eval
             print('La confiabilidad del sistema es: ', eval(conf_total)*100)
             print(conf_total)
+            print('eq1', equation)
             #print('La inconfiabilidad del sistema es: ', (1 - eval(matriz_inc[2, -2])) * 100)
         else:
             self.correct = True
-            self.plot_all = matriz_inc[2, -2]
+            self.plot_all = matriz_inc[2, -4]
             #print('El sistema es reducible')
             t = self.time_eval
-            print('La confiabilidad del sistema es: ', eval(matriz_inc[2, -2])*100)
-            print(matriz_inc[2, -2])
+            #print('La confiabilidad del sistema es: ', eval(matriz_inc[2, -3])*100)
+            #print(matriz_inc[2, -3])
+            #print('eq2', matriz_inc[2, -4])
+            func_sym = matriz_inc[2, -3]
+            self.func_sym = func_sym
+            print('funco:', self.func_sym)
+            derivates = 0
+            #print(variables_sym)
+            self.dicto_sol = {}
+            for elem in variables_sym:
+                derivates = sy.diff(func_sym, elem)
+                self.dicto_sol[elem] = derivates.subs(dicto_variables)
+            """self.soluciones = []
+            for deriv in derivates:
+                self.soluciones.append(deriv.subs(dicto_variables))"""
             #print('La inconfiabilidad del sistema es: ', (1-eval(matriz_inc[2, -2]))*100)
 
     def check_node(self, elem1, elem2):
@@ -466,12 +493,24 @@ class Container(pygame.sprite.Sprite):
 
     def system_plot(self):
         #tiempo = solve
-        t = np.linspace(0, self.time, 500)
-        plt.style.use('seaborn')  # pretty matplotlib plots
-        plt.cla()
-        plt.plot(t, eval(self.plot_all), c='blue',)
-        plt.xlabel('t')
-        plt.ylabel(r'$p(t|\beta,\alpha)$')
+        if self.type_plot == 1:  # Confiabilidad
+            t = np.linspace(0, self.time, 500)
+            plt.style.use('seaborn')  # pretty matplotlib plots
+            plt.cla()
+            plt.plot(t, eval(self.plot_all), c='blue',)
+            plt.xlabel('t')
+            plt.ylabel(r'$p(t|\beta,\alpha)$')
+        else:  # Medida de importancia
+            t = sy.symbols('t')
+            x_vals = np.linspace(0, self.time, 500)
+            plt.style.use('seaborn')  # pretty matplotlib plots
+            plt.cla()
+            for index, element in self.dicto_sol.items():
+                lam_x = sy.lambdify(t, element, modules=['numpy'])
+                y_vals = lam_x(x_vals)
+                plt.plot(x_vals, y_vals, label=index)
+                plt.legend()
+
         #plt.title(self.types[elemento.mod])
         #plt.legend()
 

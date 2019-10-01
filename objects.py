@@ -1,12 +1,14 @@
 import pygame
 import os
 import numpy as np
+import sympy as sy
 from sympy import *
 from math import factorial
 
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
+t = sy.symbols('t')
 
 class Init(pygame.sprite.Sprite):
     def __init__(self, position):
@@ -17,10 +19,12 @@ class Init(pygame.sprite.Sprite):
         self.rect.center = [position[0], position[1]]
         self.font = pygame.font.SysFont('Arial', 14)
         self.tag = "Inicio"
+        self.sym = sy.symbols(self.tag)
         self.pos = position
         self.nodos = [Nodo((self.pos[0]+40, self.pos[1]), 1, self.tag)]
         self.con = [[self.pos[0], self.pos[1]], [self.pos[0]+40, self.pos[1]]]
         self.value = '0'
+        self.value_sy = 0
         self.conexiones = pygame.sprite.Group()  # Conexiones anexas al elemento
 
     def draw(self, screen):
@@ -40,10 +44,12 @@ class End(pygame.sprite.Sprite):
         self.rect.center = [position[0], position[1]]
         self.font = pygame.font.SysFont('Arial', 14)
         self.tag = "Fin"
+        self.sym = sy.symbols(self.tag)
         self.pos = position
         self.nodos = [Nodo((self.pos[0] - 40, self.pos[1]), 1, self.tag)]
         self.con = [[self.pos[0], self.pos[1]], [self.pos[0] - 40, self.pos[1]]]
         self.value = '0'
+        self.value_sy = 0
         self.conexiones = pygame.sprite.Group()  # Conexiones anexas al elemento
 
     def draw(self, screen):
@@ -57,11 +63,13 @@ class End(pygame.sprite.Sprite):
 
 class Module(pygame.sprite.Sprite):
     """Clase que permite crear el objeto modulo"""
-    def __init__(self, pos, cont, value, container, name=""):
+    def __init__(self, pos, cont, value, container, syvalue, name=""):
         pygame.sprite.Sprite.__init__(self)
         self.tag = name
+        self.sym = sy.symbols(self.tag)
         self.simbolo = symbols(self.tag)
         self.value = value
+        self.value_sy = syvalue
         self.tipo = 'modulo'
         self.container = container
         self.image = pygame.image.load(os.path.join('pics', 'modulo.png'))
@@ -91,6 +99,7 @@ class Caja(pygame.sprite.Sprite):
         self.rect.x = pos[0]    
         self.rect.y = pos[1]
         self.tag = name+'Caja_'+str(cont)
+        self.sym = sy.symbols(name + 'Caja_' + str(cont))
         self.id = cont
         self.name = name
         self.font = pygame.font.SysFont('Arial', 14)
@@ -104,6 +113,7 @@ class Caja(pygame.sprite.Sprite):
         self.alpha = '1e-4'
         self.betha = '1'
         self.value = 'sy.exp(-(t*'+self.alpha+')**'+self.betha+')'
+        self.value_sy = sy.exp(-(t*float(self.alpha))**float(self.betha))
         self.nodos = pygame.sprite.Group()
         self.nodos.add(Nodo((self.pos[0] - 20, self.pos[1] + 40), 1, self.tag))
         self.nodos.add(Nodo((self.pos[0] + 100, self.pos[1] + 40), 2, self.tag))
@@ -111,6 +121,7 @@ class Caja(pygame.sprite.Sprite):
 
     def update_obj(self):
         self.value = 'np.exp(-(t*' + self.alpha + ')**' + self.betha + ')'
+        self.value_sy = sy.exp(-(t * float(self.alpha)) ** float(self.betha))
 
     def calc_nodes(self):
         self.nodos = pygame.sprite.Group()
@@ -171,6 +182,7 @@ class Knn(pygame.sprite.Sprite):
         self.rect.y = pos[1]-20
         self.cont = cont
         self.tag = 'Paralelo_'+str(cont)
+        self.sym = sy.symbols(self.tag)
         self.pos = pos
         self.aum = 0
         self.rest_h = pos[1]+200  # Donde s
@@ -309,8 +321,9 @@ class Stand(pygame.sprite.Sprite):
         self.rect.y = pos[1]+35
         self.cont = cont
         self.tag = 'StandBy_' + str(cont)
+        self.sym = sy.symbols(self.tag)
         self.pos = pos
-        self.num_rows = num_rows3
+        self.num_rows = num_rows
         self.cajas = pygame.sprite.Group()
         self.node_dt = 100
         self.mod = 'exp'

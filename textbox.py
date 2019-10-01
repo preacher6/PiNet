@@ -235,6 +235,38 @@ class ScrollBar:
 class RadioButton:
     def __init__(self, name, texto, position=(0, 0), size=(26, 26), color=GRAY, active=False):
         self.name = name
+        self.no_pushed = pygame.image.load(os.path.join("icons", "radio.png"))
+        self.pushed = pygame.image.load(os.path.join("icons", "radio_check.png"))
+        self.text = texto
+        self.position = position
+        self.size = size
+        self.color = color
+        self.own_surface = pygame.Surface(size)
+        self.own_surface.fill(self.color)
+        self.own_surface.blit(self.no_pushed, (0, 0))
+        self.font = pygame.font.SysFont('Arial', 14)
+        self.recta = pygame.Rect(self.position[0], self.position[1], self.size[0], self.size[1])
+        self.over = False
+        self.push = active
+
+    def draw(self, screen):
+        if self.over:
+            screen.blit(self.font.render(self.text, True, BLACK), (self.position[0] + 28, self.position[1] + 5))
+            self.font.set_underline(True)
+        else:
+            screen.blit(self.font.render(self.text, True, BLACK), (self.position[0] + 28, self.position[1] + 5))
+            self.font.set_underline(False)
+        if self.push:
+            self.own_surface.fill(self.color)
+            self.own_surface.blit(self.pushed, (0, 0))
+        else:
+            self.own_surface.fill(self.color)
+            self.own_surface.blit(self.no_pushed, (0, 0))
+        screen.blit(self.own_surface, self.position)
+
+class CheckButton:
+    def __init__(self, name, texto, position=(0, 0), size=(26, 26), color=GRAY, active=False):
+        self.name = name
         self.no_pushed = pygame.image.load(os.path.join("icons", "uncheck.png"))
         self.pushed = pygame.image.load(os.path.join("icons", "check.png"))
         self.text = texto
