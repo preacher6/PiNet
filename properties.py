@@ -1034,7 +1034,6 @@ class Property(pygame.sprite.Sprite):
                             (position[0] + 8, position[1] + 8))
             else:
                 screen.blit(self.ok_n, self.ok_rect)
-
         elif self.type_element == 4:  # KDN
             screen.blit(self.font.render('Alpha: ', True, (0, 0, 0)),
                         (self.pos_proper[0] + 25, self.pos_proper[1] + 70))
