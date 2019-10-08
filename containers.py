@@ -131,7 +131,8 @@ class Container(pygame.sprite.Sprite):
         self.conections = pygame.sprite.Group()  # Guarda las conexiones del contenedor
         self.list_box = ListBox()
         self.own_items = []  # Lista elementos propios
-        self.items = pygame.sprite.Group()  # Grupo sprites de elementos
+        self.items = pygame.sprite.Group()  # Grupo sprites de elementos. Con esta se calculan datos
+        self.real_items = pygame.sprite.Group()  # Grupo de todas las cajas. Con esta se determina colision entre cajas y otros elementos
         self.keys = [chr(97+value) for value in range(36)]
         self.ini_tag = self.keys[0]
         self.nodos_sistema = {key:pygame.sprite.Group() for key in self.keys}  # Define los nodos del sistema
@@ -140,7 +141,8 @@ class Container(pygame.sprite.Sprite):
         self.plot_all = 0
         self.all_connected = False
         self.init_containter()
-        self.time_eval = 600  # Tiempo que se desea evaluar
+        self.time_eval = 10000  # Tiempo que se desea evaluar
+        self.ploting = False  # Indica si se esta ploteando
 
     def load_pics(self):
         """Cargar imagenes"""
@@ -195,6 +197,7 @@ class Container(pygame.sprite.Sprite):
             self.nodos.add(limite.nodos)
             self.own_items.append(limite.tag)
             self.items.add(limite)
+            self.real_items.add(limite)
 
     def draw_cont(self, screen):
         """Dibujar icono de pestaña"""
@@ -218,7 +221,7 @@ class Container(pygame.sprite.Sprite):
         screen.blit(self.add, self.recta_add)
 
     def draw_elements(self, screen):
-        """Dibujar elementos del contectedor"""
+        """Dibujar elementos del contenedor"""
         for limit in self.limites:
             limit.draw(screen)
 
@@ -299,17 +302,17 @@ class Container(pygame.sprite.Sprite):
     def build_matriz(self):
         """Funcion para construir matriz de incidencia"""
         nro_nodos_sistema = len(self.nodos) - len(self.conections)  # Cantidad de nodos totales del sistema
-        nro_items = len(self.own_items)  # Nro de items presentes
+        nro_items = len(self.items)  # Nro de items presentes
         self.matriz_inc = np.zeros((nro_items,
                                     nro_nodos_sistema + 4), dtype=object)  # La columna extra es para almacenar el valor de la confiabilidad para ese elemento
         node = 0
-        for value, item in enumerate(self.own_items):
+        for value, item in enumerate(self.items):
             self.matriz_inc[value][nro_nodos_sistema] = \
-            [element_ind.value for element_ind in self.items if element_ind.tag == item][0]
+            [element_ind.value for element_ind in self.items if element_ind.tag == item.tag][0]
             self.matriz_inc[value][nro_nodos_sistema + 1] = \
-            [element_ind.sym for element_ind in self.items if element_ind.tag == item][0]
+            [element_ind.sym for element_ind in self.items if element_ind.tag == item.tag][0]
             self.matriz_inc[value][nro_nodos_sistema+2] = \
-            [element_ind.value_sy for element_ind in self.items if element_ind.tag == item][0]
+            [element_ind.value_sy for element_ind in self.items if element_ind.tag == item.tag][0]
 
             for element_ind in self.items:
                 if element_ind.tag == item:
@@ -328,7 +331,6 @@ class Container(pygame.sprite.Sprite):
                     self.matriz_inc[element][node] = 1
                 node += 1
         matriz_inc = self.matriz_inc.copy()
-        print(matriz_inc)
         del_row = []
         ana_rows = []
         num_iter = 0
@@ -338,7 +340,6 @@ class Container(pygame.sprite.Sprite):
         values_sym = matriz_inc[2:, -2].tolist()
         # Diccionario de lo simbolico
         dicto_variables = {k:v for k, v in zip(variables_sym, values_sym)}
-        print(variables_sym)
         while num_iter < 100:  # Evalua X cantidad de veces los posibles caminos
             num_iter += 1
             for index, row in enumerate(matriz_inc):  # Paralelos
@@ -434,9 +435,9 @@ class Container(pygame.sprite.Sprite):
             #print('eq2', matriz_inc[2, -4])
             func_sym = matriz_inc[2, -3]
             self.func_sym = func_sym
-            print('funco:', self.func_sym)
+            dicto_final = dict(zip(variables_sym, values_sym))
+            self.func_sym = self.func_sym.subs(dicto_final)
             derivates = 0
-            #print(variables_sym)
             self.dicto_sol = {}
             for elem in variables_sym:
                 derivates = sy.diff(func_sym, elem)
@@ -492,28 +493,26 @@ class Container(pygame.sprite.Sprite):
                         break
 
     def system_plot(self):
-        #tiempo = solve
         if self.type_plot == 1:  # Confiabilidad
-            t = np.linspace(0, self.time, 500)
+            t = np.linspace(0, int(self.time), 500)
             plt.style.use('seaborn')  # pretty matplotlib plots
             plt.cla()
             plt.plot(t, eval(self.plot_all), c='blue',)
             plt.xlabel('t')
             plt.ylabel(r'$p(t|\beta,\alpha)$')
         else:  # Medida de importancia
-            t = sy.symbols('t')
-            x_vals = np.linspace(0, self.time, 500)
-            plt.style.use('seaborn')  # pretty matplotlib plots
-            plt.cla()
-            for index, element in self.dicto_sol.items():
-                lam_x = sy.lambdify(t, element, modules=['numpy'])
-                y_vals = lam_x(x_vals)
-                plt.plot(x_vals, y_vals, label=index)
-                plt.legend()
-
-        #plt.title(self.types[elemento.mod])
-        #plt.legend()
-
+            if len(self.items)>3:
+                t = sy.symbols('t')
+                x_vals = np.linspace(0, int(self.time), 500)
+                plt.style.use('seaborn')  # pretty matplotlib plots
+                plt.cla()
+                for index, element in self.dicto_sol.items():
+                    lam_x = sy.lambdify(t, element, modules=['numpy'])
+                    y_vals = lam_x(x_vals)
+                    plt.plot(x_vals, y_vals, label=index)
+                    plt.legend()
+            else:
+                self.type_plot == 1
 
 # This class represents a directed graph
 # using adjacency list representation

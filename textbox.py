@@ -21,10 +21,10 @@ LIGHTGRAY = (192, 192, 192)
 GANSBORO = (220, 220, 220)
 SLATEGRAY = (112, 128, 144)
 ACCEPTED = string.ascii_letters + '_-.' + string.digits
-
+ACCEPTED_NUM = 'e-'+ string.digits
 
 class TextBox(object):
-    def __init__(self, rect, **kwargs):
+    def __init__(self, rect, acepted=ACCEPTED, **kwargs):
         self.rect = pygame.Rect(rect)
         self.buffer = []
         self.final = None
@@ -34,6 +34,7 @@ class TextBox(object):
         self.blink = True
         self.blink_timer = 0.0
         self.process_kwargs(kwargs)
+        self.acepted = acepted  # Caracteres aceptados
 
     def process_kwargs(self, kwargs):
         defaults = {"id" : None,
@@ -60,8 +61,10 @@ class TextBox(object):
                 self.execute()
             elif event.key == pygame.K_BACKSPACE:
                 if self.buffer:
+                    print(self.buffer)
                     self.buffer.pop()
-            elif event.unicode in ACCEPTED:
+                    print(self.buffer)
+            elif event.unicode in self.acepted:
                 self.buffer.append(event.unicode)
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             self.active = self.rect.collidepoint(event.pos)
@@ -140,9 +143,13 @@ class ListBox:
     def consult_position(self, position):
         for index in range(self.num_rects):
             if self.rects[index].collidepoint(position):
-                self.conten_actual = index+1
+                posible_indice = index+1
+                if posible_indice >= len(self.list_items):  # Si la recta consultada supera la cantidad de elementos
+                    self.conten_actual = len(self.list_items)
+                else:
+                    self.conten_actual = posible_indice
 
-    def draw(self, screen):
+    def draw(self, screen, time):
         screen.blit(self.container_clases, self.posi_container)
         self.selected_class = pygame.Rect(self.posi_container[0] + 2,
                                           (self.posi_container[1] + (30 * (self.conten_actual - 1))) + 1, 136, 28)
@@ -152,7 +159,7 @@ class ListBox:
                                                   BLACK),
                                  (self.posi_container[0] + 5, self.posi_container[1] + 5 + (index * self.dt)))
         caja = self.list_items[self.conten_actual-1]
-        self.make_plot(caja)
+        self.make_plot(caja, time)
         self.scroll.draw_bar(screen, len(self.list_items), pos_der=self.size[0], pos_abajo=self.size[1])
 
     def draw_mod(self, screen):
@@ -167,19 +174,17 @@ class ListBox:
             screen.blit(self.font.render(element.name, True,
                                                   BLACK),
                                  (self.posi_container[0] + 5, self.posi_container[1] + 5 + (index * self.dt)))
-        #print(self.conten_actual-1)
-        #caja = self.list_items[self.conten_actual-1]
-        #self.make_plot(caja)
         self.scroll.draw_bar(screen, len(self.list_items), pos_der=self.size[0], pos_abajo=self.size[1])
 
-    def make_plot(self, elemento):
+    def make_plot(self, elemento, time):
         #dist = dweibull(float(elemento.betha), 0, float(elemento.alpha))
         plt.style.use('seaborn')  # pretty matplotlib plots
         plt.cla()
         #plt.plot(self.time, dist.pdf(self.time), c='blue',
                  #label=r'$\beta=%.3f,\ \alpha=%.3f$' % (float(elemento.betha), float(elemento.alpha)))
+        self.time = np.linspace(0, time, 500)
         t = self.time
-        if elemento.tipo != 'paralelo' or elemento.tipo != 'modulo':
+        if elemento.tipo != 'paralelo' and elemento.tipo != 'modulo':
             plt.plot(self.time, eval(elemento.value), c='blue',
                      label=r'$\beta=%.3f,\ \lambda=%.3E$' % (float(elemento.betha), Decimal(elemento.alpha)))
             plt.xlabel('t')

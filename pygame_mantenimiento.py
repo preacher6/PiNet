@@ -47,17 +47,20 @@ class PGManten:
                             timer = 0.001
                             for container in self.property_class.elementos['containers']:  #Acciones de ingreso de texto
                                 if container.selected:
-                                    self.property_class.time_field.buffer = [str(container.time)]
-                        elif timer < 0.3 and not self.property_class.elem_type:  # Doble click apertura modulo
+                                    pass
+                        elif timer < 0.3 and not self.property_class.elem_type:  # Doble click apertura modulo/Debo bloquear esto mientras aun se este ejecutando el panel de propiedades
                             timer = 0
                             self.property_class.name_element.active = True  # Activar casilla de nombre propiedades
                             self.property_class.element_property(position_mouse, 1)  # Activar propiedad elemento
-                            self.property_class.name_element.buffer = [self.property_class.elem_selected]  # Buffer
+                            if self.property_class.elem_selected:
+                                self.property_class.name_element.buffer = [char for char in self.property_class.elem_selected]
+                            # Aca se le pone al buffer el texto del elemento seleccionado
+                            print([self.property_class.elem_selected])
                             for container in self.property_class.elementos['containers']:  #Acciones de ingreso de texto
                                 if container.selected:
                                     for caja in container.cajas:
                                         if caja.tag == self.property_class.elem_selected:
-                                            self.property_class.box_field1.buffer = [str(caja.alpha)]
+                                            self.property_class.box_field1.buffer = [char for char in str(caja.alpha)]  # se le pone a los buffers los valores de los elementos seleccionados
                                             self.property_class.box_field2.buffer = [str(caja.betha)]
                                     for knn_ind in container.knn:
                                         for col in knn_ind.cols:
@@ -76,7 +79,6 @@ class PGManten:
                                             self.property_class.box_field2.buffer = [str(kdn.betha)]
                         if self.property_class.container.recta_new.collidepoint(position_mouse) \
                                 and self.property_class.cont < 7:  # Agregar pestañas si son menos de 7
-                            print('jmmm')
                             self.property_class.add_container()
                         self.property_class.delete_container(position_mouse)  # Verificar si alguna pestaña se cierra
                         self.property_class.select_container(position_mouse)  # Seleccionar pestaña
@@ -105,9 +107,9 @@ class PGManten:
 
                             else:
                                 self.property_class.duple_conection.pop()
-                        if self.property_class.actions[3]:
+                        if self.property_class.actions[3]:  # Eliminar elemento
                             self.property_class.delete_element(position_mouse)
-                        if self.property_class.actions[5]:
+                        if self.property_class.actions[5]:  # importa modulo
                             if self.property_class.list_box_modules.accept.recta.collidepoint(position_mouse):
                                 self.property_class.draw_module = True
                                 self.property_class.elem_modulo = self.property_class.list_box_modules.list_items[self.property_class.list_box_modules.conten_actual-1]
@@ -137,6 +139,8 @@ class PGManten:
                 elif keys[K_ESCAPE]:  # Acciones al presionar tecla escape
                     position_mouse = self.property_class.cancel()
                     self.property_class.close_elements((0, 0), force=True)
+                    self.property_class.box_field1.active = False
+                    self.property_class.box_field2.active = False
             if timer != 0:  # Incremento del timer
                 timer += dt
                 if timer >= 0.5:  # Reinicio del timer
@@ -145,7 +149,7 @@ class PGManten:
             self.screen_form.fill(GRAY)
             self.property_class.draw_containers(self.screen_form)
             self.property_class.draw_on_screen(self.screen_form, abs_position, position_mouse)
-            self.property_class.exec_actions(self.screen_form, abs_position, position_mouse)
+            self.property_class.exec_actions(self.screen_form, abs_position, position_mouse)  # Ejecutar acciones: Mover, borrar...
             if self.property_class.actions[6] or self.property_class.elem_proper or self.property_class.config_bit:  # Escribir nombre de pestañas
                 self.property_class.draw_text(self.screen_form)
                 self.property_class.draw = True

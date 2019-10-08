@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 import matplotlib.backends.backend_agg as agg
 
 
+ACCEPTED_NUM = 'e-'+ string.digits
 GRAY = (128, 128, 128)
 WHITE = (255, 255, 255)
 
@@ -68,6 +69,7 @@ class Property(pygame.sprite.Sprite):
         self.data_file = 'datos/data.txt'
         self.list_box_modules = ListBox(posi=(360, 230))
         self.config_bit = False
+        self.time = True
 
     def init_properties(self):
         self.container = Container((self.pos_workspace[0],
@@ -108,11 +110,12 @@ class Property(pygame.sprite.Sprite):
 
     def add_container(self, new=True, old_container=None):
         """Añadir pestañas a la interfaz. Cada pestaña es un area de trabajo diferente"""
-        existe =False
+        existe = False
         if new:  # Indica si es un nuevo contenedor (no modulo)
             self.cont += 1  # Contador de pestañas
             self.tag += 1  # Etiqueta pestaña
             container_new = Container((self.pos_workspace[0], self.pos_workspace[1]-30), self.cont, self.tag)
+            self.time_field.buffer = [str(container_new.time)]
         else:
             if old_container in self.elementos['containers']:  # Se evalua si el modulo esta abierto
                 existe = True
@@ -148,21 +151,27 @@ class Property(pygame.sprite.Sprite):
                                 contain.selected = True
                                 container.selected = False
 
+        if len(self.elementos['containers']) == 1:
+            for container in self.elementos['containers']:
+                container.selected = True
+
     def select_container(self, position):
         """Seleccionar pestaña a activar"""
         for container in self.elementos['containers']:
             if container.rect.collidepoint(position):
                 container.selected = True
+                self.time_field.buffer = [str(container.time)]
                 for contain in self.elementos['containers']:
                     if container.cont != contain.cont:
                         contain.selected = False
 
-        for option in self.elementos['opciones']:
-            if option.rect.collidepoint(position):
-                option.active = True
-                for opt in self.elementos['opciones']:
-                    if option.name != opt.name:
-                        opt.active = False
+        if not 1 in self.text_status:  # Verifica que no haya ninguna textbox al aire antes de poder cambiar entre pantallas
+            for option in self.elementos['opciones']:
+                if option.rect.collidepoint(position):
+                    option.active = True
+                    for opt in self.elementos['opciones']:
+                        if option.name != opt.name:
+                            opt.active = False
 
     def draw_cont_elements(self, screen):
         """Dibujar elementos del contenedor seleccionado"""
@@ -174,26 +183,35 @@ class Property(pygame.sprite.Sprite):
 
     def check_actions(self, position):
         """Verificar que acción se va a realizar"""
-        if self.connect_rect.collidepoint(position):
+        if self.connect_rect.collidepoint(position):  # conectar
             self.actions = [0] * 9
             self.actions[0] = 1
-        if self.disconnect_rect.collidepoint(position):
-            print('desconectar')
-        if self.move_rect.collidepoint(position):
+        if self.disconnect_rect.collidepoint(position):  # Desconectar
+            pass
+        if self.move_rect.collidepoint(position):  # Mover
             self.actions = [0]*9
             self.actions[2] = 1
-        if self.delete_rect.collidepoint(position):
+        if self.delete_rect.collidepoint(position):  # Eliminar
             self.actions = [0] * 9
             self.actions[3] = 1
-        if self.export_rect.collidepoint(position):
+        if self.export_rect.collidepoint(position):  # Exportar
             self.actions = [0] * 9
-            self.actions[4] = 1
-        if self.import_rect.collidepoint(position):
+            # Verificar si es posible importar, o sea, todo está bien conectado
+            for container in self.elementos['containers']:
+                if container.selected:
+                    if container.all_connected:
+                        self.actions[4] = 1
+                    else:
+                        print('no')
+        if self.import_rect.collidepoint(position):  # Importar
             self.actions = [0] * 9
-            self.actions[5] = 1
+            # Preguntar si existen elementos a importar, o sea, si existen modulos
+            if self.module_lista:
+                self.actions[5] = 1
+            else:
+                print('no hay modulos')
         if self.rename_rect.collidepoint(position):
             self.actions = [0]*9
-            print(self.actions)
             self.actions[6] = 1
 
     @staticmethod
@@ -263,13 +281,14 @@ class Property(pygame.sprite.Sprite):
         elif self.actions[4]:  # Exportar modulo
             for container in self.elementos['containers']:
                 if container.selected:
-                    if container.all_connected:
-                        self.module_lista.append(container)
-                        self.module_names.append(container.name)
-                        self.data_general = {'modulos': self.module_lista, 'nombres': self.module_names}
-                        self.list_box_modules.add_data(container)
-                        self.cancel()
-                        break
+                    if container.name not in self.module_names:
+                        if container.all_connected:
+                            self.module_lista.append(container)
+                            self.module_names.append(container.name)
+                            self.data_general = {'modulos': self.module_lista, 'nombres': self.module_names}
+                            self.list_box_modules.add_data(container)
+                            self.cancel()
+                            break
         elif self.actions[5]:  # Importar modulo
             self.list_box_modules.consult_position(abs_position)
             self.list_box_modules.draw_mod(screen)
@@ -289,12 +308,14 @@ class Property(pygame.sprite.Sprite):
                 self.actions[6] = 0  # Cierra ventana name
 
     def element_property(self, pushed, proper=0):  # Acciones de doble click
-        """Propiedad de un elemento"""
+        """Propiedad de un elemento
+        Coloca en la ventana de doble click los valores del elementos seleccionado
+        """
         for container in self.elementos['containers']:
             if container.selected:
                 for caja in container.cajas:
                     if caja.rect.collidepoint(pushed):
-                        self.elem_selected = caja.tag
+                        self.elem_selected = caja.tag  # Coloca el nombre de la caja en la caja de texto del elemento seleccionado
                         self.type_element = 1
                         if not proper:
                             self.elem_type = True
@@ -356,7 +377,6 @@ class Property(pygame.sprite.Sprite):
                     if module.rect.collidepoint(pushed):
                         self.add_container(new=False, old_container=module.container)
 
-
     def add_red_elements(self, push_position):
         """Agregar o quitar paralelos a un knn"""
         if self.elem_type:
@@ -367,18 +387,25 @@ class Property(pygame.sprite.Sprite):
                             if self.addline_rect.collidepoint(push_position):  # Adicionar paralelo
                                 if knn_ind.num_rows < 5:
                                     if knn_ind.tag == self.elem_selected:
-                                        for nodo in container.nodos:
-                                            if nodo.name_element == self.elem_selected:
-                                                container.nodos.remove(nodo)
-                                        caja = Caja((knn_ind.pos[0] + 20, knn_ind.pos[1] + knn_ind.num_rows * knn_ind.dt)
-                                                                                , 1, name=knn_ind.tag + "_" + str(knn_ind.num_rows))
-                                        knn_ind.cols[knn_ind.num_rows].add(caja)
-                                        container.list_box.add_data(caja)  # Agregar item a list box
-                                        knn_ind.num_rows += 1
-                                        knn_ind.calc_lines()
-                                        knn_ind.calc_nodes()
-                                        for nodo in knn_ind.nodos:
-                                            container.nodos.add(nodo)
+                                        caja = Caja(
+                                            (knn_ind.pos[0] + 20, knn_ind.pos[1] + knn_ind.num_rows * knn_ind.dt)
+                                            , 1, name=knn_ind.tag + "_" + str(knn_ind.num_rows))
+                                        hit = pygame.sprite.spritecollide(caja, container.real_items,
+                                                                          False)  # Verifica si no colisiona sobre otro elemento
+                                        if not hit:
+                                            container.real_items.add(caja)
+                                            for nodo in container.nodos:
+                                                if nodo.name_element == self.elem_selected:
+                                                    container.nodos.remove(nodo)
+                                            knn_ind.cols[knn_ind.num_rows].add(caja)
+                                            container.list_box.add_data(caja)  # Agregar item a list box
+                                            knn_ind.num_rows += 1
+                                            knn_ind.calc_lines()
+                                            knn_ind.calc_nodes()
+                                            for nodo in knn_ind.nodos:
+                                                container.nodos.add(nodo)
+                                        else:
+                                            print('colisiona con algo')
 
                             if self.reduceline_rect.collidepoint(push_position):  # Eliminar paralelo
                                 if knn_ind.num_rows > 2:
@@ -401,15 +428,19 @@ class Property(pygame.sprite.Sprite):
                                                                         knn_ind.pos[1] + ind * knn_ind.dt),
                                                                         len(knn_ind.cols[ind])+1,
                                                                         name=knn_ind.tag + "_" + str(ind))
-                                            knn_ind.cols[ind].add(caja)
-                                            for nodo in container.nodos:
-                                                if nodo.name_element == self.elem_selected:
-                                                    container.nodos.remove(nodo)
-                                            knn_ind.calc_lines()
-                                            knn_ind.calc_nodes()
-                                            for nodo in knn_ind.nodos:
-                                                container.nodos.add(nodo)
-                                            container.list_box.add_data(caja)
+                                            hit = pygame.sprite.spritecollide(caja, container.real_items,
+                                                                              False)  # Verifica si no colisiona sobre otro elemento
+                                            if not hit:
+                                                container.real_items.add(caja)
+                                                knn_ind.cols[ind].add(caja)
+                                                for nodo in container.nodos:
+                                                    if nodo.name_element == self.elem_selected:
+                                                        container.nodos.remove(nodo)
+                                                knn_ind.calc_lines()
+                                                knn_ind.calc_nodes()
+                                                for nodo in knn_ind.nodos:
+                                                    container.nodos.add(nodo)
+                                                container.list_box.add_data(caja)
 
                             for ind, recta in enumerate(self.rects_knn_reduce):  # Eliminar serie
                                 if recta.collidepoint(push_position):
@@ -588,11 +619,11 @@ class Property(pygame.sprite.Sprite):
                             clear_on_enter=False, inactive_on_enter=True)
         self.name_element = TextBox((485, 220, 100, 20), id="name_con", active=True,
                                     clear_on_enter=False, inactive_on_enter=True)
-        self.box_field1 = TextBox((485, 250, 100, 20), id="name_con", active=False,
+        self.box_field1 = TextBox((485, 250, 100, 20), acepted=ACCEPTED_NUM, id="name_con", active=False,
                                   clear_on_enter=False, inactive_on_enter=True)
-        self.box_field2 = TextBox((485, 280, 100, 20), id="name_con", active=False,
+        self.box_field2 = TextBox((485, 280, 100, 20), acepted=ACCEPTED_NUM, id="name_con", active=False,
                                   clear_on_enter=False, inactive_on_enter=True)
-        self.time_field = TextBox((150, 260, 100, 20), id="name_con", active=True,
+        self.time_field = TextBox((150, 260, 100, 20), acepted=ACCEPTED_NUM, id="name_con", active=True,
                                   clear_on_enter=False, inactive_on_enter=True)
 
     def check_text(self, event):
@@ -718,27 +749,46 @@ class Property(pygame.sprite.Sprite):
                     container.cont_cajas += 1
                     container.all_cajas += 1
                     caja = Caja(self.put_position, container.all_cajas)
-                    container.list_box.add_data(caja)
-                    for nodo in caja.nodos:
-                        container.nodos.add(nodo)
-                    container.cajas.add(caja)
-                    container.own_items.append(caja.tag)
-                    container.items.add(caja)
+                    hit = pygame.sprite.spritecollide(caja, container.real_items, False)  # Verifica si no colisiona sobre otro elemento
+                    if not hit:
+                        container.list_box.add_data(caja)
+                        for nodo in caja.nodos:
+                            container.nodos.add(nodo)
+                        container.cajas.add(caja)
+                        container.own_items.append(caja.tag)
+                        container.items.add(caja)
+                        container.real_items.add(caja)
+                    else:
+                        container.cont_cajas -= 1
+                        container.all_cajas -= 1
         elif self.hold_knn:
             for container in self.elementos['containers']:
                 if container.selected:
                     container.cont_knn += 1
                     container.all_knn += 1
                     knn = Knn(self.put_position, container.all_knn)
+                    colision = False
                     for col in knn.cols:
                         for caja in col:
-                            container.list_box.add_data(caja)
-                    container.list_box.add_data(knn)
-                    for nodo in knn.nodos:
-                        container.nodos.add(nodo)
-                    container.knn.add(knn)
-                    container.own_items.append(knn.tag)
-                    container.items.add(knn)
+                            hit = pygame.sprite.spritecollide(caja, container.real_items,
+                                                              False)  # Verifica si no colisiona sobre otro elemento
+                            if hit:
+                                colision = True
+                                break
+                    if not colision:  # Si ninguna de las cajas del paralelo colisiona entonces sea crea
+                        for col in knn.cols:
+                            for caja in col:
+                                container.list_box.add_data(caja)
+                                container.real_items.add(caja)
+                        container.list_box.add_data(knn)
+                        for nodo in knn.nodos:
+                            container.nodos.add(nodo)
+                        container.knn.add(knn)
+                        container.own_items.append(knn.tag)
+                        container.items.add(knn)
+                    else:
+                        container.cont_knn -= 1
+                        container.all_knn -= 1
         elif self.hold_stand:
             for container in self.elementos['containers']:
                 if container.selected:
@@ -809,43 +859,72 @@ class Property(pygame.sprite.Sprite):
                     if self.ok_rect2.collidepoint(push_position):  # Si se presiona sobre ok
                         for container in self.elementos['containers']:
                             if container.selected:  # Agregar nombre a cajas
-                                for caja in container.cajas:
-                                    if caja.tag == self.elem_selected:
-                                        caja.tag = "".join(self.name_element.buffer)
-                                        caja.alpha = "".join(self.box_field1.buffer)
-                                        caja.betha = "".join(self.box_field2.buffer)
-                                        self.elem_proper = False
-                                for knn_ind in container.knn:
-                                    if knn_ind.tag == self.elem_selected:
-                                        knn_ind.tag = "".join(self.name_element.buffer)
-                                    for set_boxes in knn_ind.cols:
-                                        for caja in set_boxes:
-                                            if caja.tag == self.elem_selected:
-                                                caja.tag = "".join(self.name_element.buffer)
-                                                caja.alpha = "".join(self.box_field1.buffer)
-                                                caja.betha = "".join(self.box_field2.buffer)
-                                                self.elem_proper = False
-                                for stand_ind in container.stand:
-                                    for caja in stand_ind.cajas:
-                                        if caja.tag == self.elem_selected:
-                                            caja.tag = "".join(self.name_element.buffer)
-                                            caja.alpha = "".join(self.box_field1.buffer)
-                                            caja.betha = "".join(self.box_field2.buffer)
-                                            self.elem_proper = False
-                                for kdn in container.kdn:
-                                    if kdn.tag == self.elem_selected:
-                                        kdn.tag == "".join(self.name_element.buffer)
-                                        kdn.alpha = "".join(self.box_field1.buffer)
-                                        kdn.betha = "".join(self.box_field2.buffer)
-                                        self.elem_proper = False
+                                nombre = "".join(self.name_element.buffer)
+                                buffer1 = "".join(self.box_field1.buffer)
+                                buffer2 = "".join(self.box_field2.buffer)
+                                if nombre not in container.own_items or nombre==self.elem_selected:  # Verifica que no sea nombre repetido. A menos que sea el de si mismo
+                                    if not 'Caja_' in nombre or nombre==self.elem_selected:  # Verifica que no sea el nombre del sistema. A menos que sea el de si mismo
+                                        try:  # Verifica que los datos númericos sean validos
+                                            if (isinstance(eval(buffer1), float) or isinstance(eval(buffer2), int)) \
+                                                    and (isinstance(eval(buffer2), float) or isinstance(eval(buffer2), int)):
+                                                for caja in container.cajas:
+                                                    if caja.tag == self.elem_selected:
+                                                        if nombre and buffer1 and buffer2:
+                                                            for item in container.items:
+                                                                if item.tag==caja.tag:
+                                                                    item.tag = "".join(self.name_element.buffer)
+                                                            caja.tag = "".join(self.name_element.buffer)
+                                                            caja.alpha = "".join(self.box_field1.buffer)
+                                                            caja.betha = "".join(self.box_field2.buffer)
+                                                            self.elem_proper = False
+                                                            self.text_status = [0]*5
+                                                        else:
+                                                            print('nada')
+
+                                                for knn_ind in container.knn:
+                                                    if knn_ind.tag == self.elem_selected:
+                                                        if nombre:  # Verificar si el nombre no está vacío
+                                                            knn_ind.tag = "".join(self.name_element.buffer)
+                                                    for set_boxes in knn_ind.cols:
+                                                        for caja in set_boxes:
+                                                            if caja.tag == self.elem_selected:
+                                                                if nombre and buffer1 and buffer2:
+                                                                    caja.tag = "".join(self.name_element.buffer)
+                                                                    caja.alpha = "".join(self.box_field1.buffer)
+                                                                    caja.betha = "".join(self.box_field2.buffer)
+                                                                    self.elem_proper = False
+                                                for stand_ind in container.stand:
+                                                    for caja in stand_ind.cajas:
+                                                        if caja.tag == self.elem_selected:
+                                                            if nombre and buffer1 and buffer2:
+                                                                caja.tag = "".join(self.name_element.buffer)
+                                                                caja.alpha = "".join(self.box_field1.buffer)
+                                                                caja.betha = "".join(self.box_field2.buffer)
+                                                                self.elem_proper = False
+                                                for kdn in container.kdn:
+                                                    if kdn.tag == self.elem_selected:
+                                                        if nombre and buffer1 and buffer2:
+                                                            kdn.tag == "".join(self.name_element.buffer)
+                                                            kdn.alpha = "".join(self.box_field1.buffer)
+                                                            kdn.betha = "".join(self.box_field2.buffer)
+                                                            self.elem_proper = False
+                                            else:
+                                                print('No es numero')
+                                        except:
+                                            print('dato invalido')
+                                    else:
+                                        print('nombre reservado por el sistema. Elija otro')
+                                else:
+                                    print('el nombre ya existe')
 
                     if self.ok_rect.collidepoint(push_position):  # Si se presiona sobre ok
                         for container in self.elementos['containers']:
                             if container.selected:
                                 for knn in container.knn:
                                     if knn.tag == self.elem_selected:
-                                        knn.tag = "".join(self.name_element.buffer)
-                                        self.elem_proper = False
+                                        if nombre:
+                                            knn.tag = "".join(self.name_element.buffer)
+                                            self.elem_proper = False
                 if self.elem_type:
                     self.type_surface(screen, position, push_position)
 
@@ -855,7 +934,9 @@ class Property(pygame.sprite.Sprite):
                         if container.selected:
                             if len(container.list_box.list_items) > 0:
                                 screen.blit(self.plot_surface, self.pos_plot)
-                                container.list_box.draw(screen)
+                                t = container.time
+                                print('time', t)
+                                container.list_box.draw(screen, t)
                                 container.list_box.consult_position(push_position)
                                 screen.blit(self.canvas_space(self.fig), (310, 240))
                             else:
@@ -868,37 +949,56 @@ class Property(pygame.sprite.Sprite):
                 if elemento.active:
                     for container in self.elementos['containers']:
                         if container.selected:
-                            screen.blit(self.plot_surface, self.pos_plot)
-                            container.system_plot()
-                            screen.blit(self.canvas_space(self.fig), (310, 240))
-                            t = container.time_eval
-                            screen.blit(self.font.render('La confiabilidad del sistema es: '+str(round(eval(container.plot_all)*100,3))+'%' , True, (0, 0, 0)), (80, 300))
-                            screen.blit(self.font.render('La inconfiabilidad del sistema es: ' + str(
-                                round((1-eval(container.plot_all)) * 100, 3)) + '%', True, (0, 0, 0)), (80, 330))
-                            for radio in self.radio_out:
-                                radio.draw(screen)
-                                if radio.recta.collidepoint(push_position):
-                                    radio.push = True
-                                    if radio.name == 'Radio1':
-                                        container.type_plot = 1
-                                    else:
-                                        container.type_plot = 0
-                                    for otro_radio in self.radio_out:
-                                        if otro_radio.name != radio.name:
-                                            otro_radio.push = False
+                            if container.all_connected:
+                                screen.blit(self.plot_surface, self.pos_plot)
+                                container.system_plot()
+                                screen.blit(self.canvas_space(self.fig), (310, 240))
+                                t = container.time
+                                screen.blit(self.font.render('La confiabilidad del sistema es: '+str(round(eval(container.plot_all)*100,3))+'%' , True, (0, 0, 0)), (80, 300))
+                                screen.blit(self.font.render('La inconfiabilidad del sistema es: ' + str(
+                                    round((1-eval(container.plot_all)) * 100, 3)) + '%', True, (0, 0, 0)), (80, 330))
+                                for radio in self.radio_out:
+                                    radio.draw(screen)
+                                    if len(container.items) > 3:
+                                        if radio.recta.collidepoint(push_position):
+                                            radio.push = True
+                                            if radio.name == 'Radio1':
+                                                container.type_plot = 1
+                                            else:
+                                                container.type_plot = 0
+                                            for otro_radio in self.radio_out:
+                                                if otro_radio.name != radio.name:
+                                                    otro_radio.push = False
+                            else:
+                                elemento.active = False
+                                for elem in self.elementos['opciones']:
+                                    if elem.name == 'module':
+                                        elem.active = True
 
             elif elemento.name == 'config':
                 if elemento.active:
                     for container in self.elementos['containers']:
                         if container.selected:
                             self.config_bit = True
-                            self.config_panel(container, screen)
+                            self.config_panel(container, screen, position, push_position)
 
-    def config_panel(self, container, screen):
-        screen.blit(self.font.render('Parámetros del contenedor "'+container.name+'"', True, (0, 0, 0)), (95, 210))
-        screen.blit(self.font.render('Tiempo:', True, (0, 0, 0)), (95, 259))
+    def config_panel(self, container, screen, over_mouse, pushed):
+        if self.time:
+            self.time_field.buffer = [str(container.time)]
+        self.time = False
+        screen.blit(self.font.render('Parámetros del contenedor "'+container.name+'"', True, (0, 0, 0)), self.pos_config)
+        screen.blit(self.font.render('Tiempo:', True, (0, 0, 0)), (self.pos_config[0], self.pos_config[1]+39))
+        #self.time_field.buffer = [str(container.time)]
         self.time_field.update()
         self.time_field.draw(screen)
+        screen.blit(self.ok_n, self.ok_rect3)
+        if self.ok_rect3.collidepoint(over_mouse):  # Mouse over button
+            screen.blit(self.ok_s, self.ok_rect3)
+        if self.ok_rect3.collidepoint(pushed):  # Boton presionado
+            print("".join(self.time_field.buffer))
+            container.time = "".join(self.time_field.buffer)
+            self.new_time = True
+
 
     def cancel(self):
         """Cancelar acciones en ejecución"""
@@ -923,6 +1023,7 @@ class Property(pygame.sprite.Sprite):
         self.elem_modulo = None
         pygame.mouse.set_visible(True)
         position = (0, 0)
+        self.text_status[:4] = [0]*4
         return position
 
     #  -----------------------Relacionado a superficies----------------------------
@@ -949,6 +1050,7 @@ class Property(pygame.sprite.Sprite):
         self.plot_surface = pygame.Surface((self.SIZE_WORKSPACE[0]-30, self.SIZE_WORKSPACE[1]-30))
         self.plot_surface.fill(GRAY)
         self.pos_plot = (self.pos_workspace[0]+15, self.pos_workspace[1]+15)
+        self.pos_config = (95, 210)  # posicion para configuración
 
     def options_panel(self, position, cont):
         self.image = self.option_s  # Imagen actual de la pestaña opcion (activa)
@@ -968,7 +1070,7 @@ class Property(pygame.sprite.Sprite):
                     (self.pos_proper[0] + 10, self.pos_proper[1] + 10))
         screen.blit(self.font.render('Nombre: ', True, (0, 0, 0)),
                     (self.pos_proper[0] + 15, self.pos_proper[1] + 40))
-        if self.type_element == 1:  # Si es tipo 1, osea solo caja
+        if self.type_element == 1:  # Si es tipo 1, o sea solo caja
             screen.blit(self.font.render('Alpha: ', True, (0, 0, 0)),
                         (self.pos_proper[0] + 25, self.pos_proper[1] + 70))
             screen.blit(self.font.render('Betha: ', True, (0, 0, 0)),
@@ -1005,7 +1107,7 @@ class Property(pygame.sprite.Sprite):
                                 elif caja.mod == 'wei':
                                     self.text_status = [0, 0, 0, 1, 0]
 
-            if self.ok_rect2.collidepoint(position):
+            if self.ok_rect2.collidepoint(position):  # Verificar si los parámetros son validos
                 screen.blit(self.ok_s, self.ok_rect2)
                 screen.blit(self.font.render('Aceptar', True, (0, 0, 0)),
                             (position[0] + 8, position[1] + 8))
@@ -1134,7 +1236,6 @@ class Property(pygame.sprite.Sprite):
                                     screen.blit(self.addline_n, recta)
                             else:
                                 screen.blit(self.addline_not, recta)
-
 
             for ind, recta in enumerate(self.rects_knn_reduce):  # Rectar de reducir series
                 for container in self.elementos['containers']:
@@ -1345,7 +1446,6 @@ class Property(pygame.sprite.Sprite):
         self.load_rect = self.load_n.get_rect()
         self.load_rect.x = pos_actions[0] + 107
         self.load_rect.y = pos_actions[1] + 83
-
         self.close_name_rect = self.close.get_rect()
         self.close_name_rect.x = self.pos_rename[0] + 170
         self.close_name_rect.y = self.pos_rename[1] + 5
@@ -1355,6 +1455,9 @@ class Property(pygame.sprite.Sprite):
         self.ok_rect2 = self.ok_n.get_rect()  # Ok para propiedades
         self.ok_rect2.x = self.pos_proper[0] + 85
         self.ok_rect2.y = self.pos_proper[1] + 125
+        self.ok_rect3 = self.ok_n.get_rect()  # Ok para configu
+        self.ok_rect3.x = self.pos_config[0] + 85
+        self.ok_rect3.y = self.pos_config[1] + 125
         self.addline_rect = self.addline_n.get_rect()
         self.addline_rect.x = self.pos_proper[0] + 110
         self.addline_rect.y = self.pos_proper[1] + 35

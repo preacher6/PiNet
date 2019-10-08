@@ -60,12 +60,12 @@ class End(pygame.sprite.Sprite):
             nodo.draw(screen)
 
 
-
 class Module(pygame.sprite.Sprite):
     """Clase que permite crear el objeto modulo"""
     def __init__(self, pos, cont, value, container, syvalue, name=""):
         pygame.sprite.Sprite.__init__(self)
         self.tag = name
+        self.real_tag = name  # Nombre de objeto + contenedor
         self.sym = sy.symbols(self.tag)
         self.simbolo = symbols(self.tag)
         self.value = value
