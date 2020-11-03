@@ -14,7 +14,7 @@ Se requieren las siguientes librerias para su ejecución:
 - Sympy
 - Pygame
 
-####Para su ejecución se requiere del siguiente comando en la terminal:
+#### Para su ejecución se requiere del siguiente comando en la terminal:
 
 `$ python PiNet.py`
 
